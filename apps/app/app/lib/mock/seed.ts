@@ -369,3 +369,14 @@ export const AUDIT_EVENTS: AuditEvent[] = [
 		category: 'MEMBERS',
 	},
 ]
+
+const demoOwner = MEMBERS.find((member) => member.role === 'OWNER')!
+
+/** The signed-in person in the public demo embedded on the website. */
+export const DEMO_USER: User = {
+	id: demoOwner.id,
+	name: demoOwner.name,
+	email: demoOwner.email,
+	role: demoOwner.role,
+	organization_id: ORGANIZATION.id,
+}

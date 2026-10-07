@@ -8,6 +8,7 @@ import { NavLink } from 'react-router'
 import { useGetChats } from '~/api/chats'
 import { useGetKnowledgeStats } from '~/api/documents'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 
 interface Props {
 	onNavigate?: () => void
@@ -63,12 +64,19 @@ function NavItem({
 
 export function PrimaryNav(props: Props) {
 	const { data: stats } = useGetKnowledgeStats()
+	const { path } = useAppBase()
 
 	return (
 		<nav aria-label="Main" className="flex flex-col gap-1">
-			<NavItem to="/" end icon={MessageSquare} label="Workspace" {...props} />
 			<NavItem
-				to="/knowledge"
+				to={path('/')}
+				end
+				icon={MessageSquare}
+				label="Workspace"
+				{...props}
+			/>
+			<NavItem
+				to={path('/knowledge')}
 				icon={BookOpen}
 				label="Knowledge"
 				meta={stats ? String(stats.total) : undefined}
@@ -79,9 +87,10 @@ export function PrimaryNav(props: Props) {
 }
 
 export function SettingsNavItem(props: Props) {
+	const { path } = useAppBase()
 	return (
 		<NavItem
-			to="/settings"
+			to={path('/settings')}
 			icon={SlidersHorizontal}
 			label="Settings"
 			{...props}
@@ -91,6 +100,7 @@ export function SettingsNavItem(props: Props) {
 
 export function RecentChats({ onNavigate }: Props) {
 	const { data: chats } = useGetChats()
+	const { path } = useAppBase()
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -102,7 +112,7 @@ export function RecentChats({ onNavigate }: Props) {
 				{chats?.map((chat) => (
 					<NavLink
 						key={chat.id}
-						to={`/chats/${chat.id}`}
+						to={path(`/chats/${chat.id}`)}
 						onClick={onNavigate}
 						className={({ isActive }) =>
 							cn(

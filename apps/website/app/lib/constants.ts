@@ -9,12 +9,6 @@ export const APP_URL = 'https://dossier-africa.fly.dev'
 export const CONTACT_EMAIL = 'hello@dossier.africa'
 export const WHATSAPP_NUMBER = '+233 00 000 0000'
 
-/**
- * Base URL of the live product the home page demo embeds, e.g.
- * `${APP_URL}/demo`. While empty, the demo shows a placeholder.
- */
-export const PRODUCT_DEMO_URL = ''
-
 export const QUERY_KEYS = {} as const
 
 export const PAGINATION_DEFAULTS = {

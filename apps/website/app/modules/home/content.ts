@@ -10,37 +10,37 @@ export const DEMO_TABS = [
 		value: 'ask',
 		label: 'home.demo.ask',
 		note: 'home.demo.askNote',
-		query: 'screen=workspace&play=ask',
+		demoPath: '/demo?play=ask',
 	},
 	{
 		value: 'review',
 		label: 'home.demo.review',
 		note: 'home.demo.reviewNote',
-		query: 'screen=workspace&play=review',
+		demoPath: '/demo?play=review',
 	},
 	{
 		value: 'draft',
 		label: 'home.demo.draft',
 		note: 'home.demo.draftNote',
-		query: 'screen=workspace&play=draft',
+		demoPath: '/demo?play=draft',
 	},
 	{
 		value: 'compare',
 		label: 'home.demo.compare',
 		note: 'home.demo.compareNote',
-		query: 'screen=workspace&play=compare',
+		demoPath: '/demo?play=compare',
 	},
 	{
 		value: 'knowledge',
 		label: 'home.demo.knowledge',
 		note: 'home.demo.knowledgeNote',
-		query: 'screen=knowledge',
+		demoPath: '/demo/knowledge',
 	},
 ] as const satisfies ReadonlyArray<{
 	value: string
 	label: MessageKey
 	note: MessageKey
-	query: string
+	demoPath: string
 }>
 
 export type DemoTab = (typeof DEMO_TABS)[number]['value']

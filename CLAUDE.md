@@ -109,6 +109,8 @@ types/                Global domain types (*.d.ts)
 - Documents that are processing are polled with `refetchInterval` until ready
 - URL state for filters (`/knowledge?collection=…&view=templates&q=…`) and drawers (`/knowledge/:documentId`)
 - Theme: `theme` cookie (`light` | `dark` | `system`), `data-theme` on `<html>`
+- Public demo: `/demo/*` re-exports the real page routes inside `routes/demo.tsx` (sample owner, no auth, light theme). The website embeds it in its product demo; only the website may frame it (`frame-ancestors` in `entry.server.tsx`). `?play=ask|review|draft|compare` auto-types and sends that task's first example
+- Never hard-code in-app paths: use `useAppBase().path('/knowledge')` so links work both in the app and under `/demo`
 
 ## Links Between the Website and the App
 

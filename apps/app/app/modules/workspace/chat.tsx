@@ -7,10 +7,12 @@ import { Alert } from '~/components/arc/alert/alert'
 import { Button } from '~/components/arc/button/button'
 import { EmptyState } from '~/components/arc/empty-state/empty-state'
 import { Skeleton } from '~/components/arc/skeleton/skeleton'
+import { useAppBase } from '~/providers/app-base-provider'
 
 export function ChatModule() {
 	const { chatId = '' } = useParams()
 	const navigate = useNavigate()
+	const { path } = useAppBase()
 	const { data: chat, isPending, isError, error } = useGetChat(chatId)
 	const sendMessage = useSendMessage(chatId)
 	const [draft, setDraft] = useState('')
@@ -34,7 +36,7 @@ export function ChatModule() {
 					title="This chat isn’t available"
 					description={error.message}
 					action={
-						<Button variant="secondary" onClick={() => navigate('/')}>
+						<Button variant="secondary" onClick={() => navigate(path('/'))}>
 							Start a new chat
 						</Button>
 					}

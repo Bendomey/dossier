@@ -4,8 +4,12 @@ import { isbot } from 'isbot'
 import { renderToPipeableStream } from 'react-dom/server'
 import type { EntryContext } from 'react-router'
 import { ServerRouter } from 'react-router'
+import { WEBSITE_URL } from './lib/constants'
 
 const ABORT_DELAY = 5_000
+
+/** Origins allowed to embed the public demo (/demo) in an iframe. */
+const DEMO_FRAME_ANCESTORS = [WEBSITE_URL, 'http://localhost:3000']
 
 export default function handleRequest(
 	request: Request,
@@ -26,7 +30,14 @@ export default function handleRequest(
 					const stream = createReadableStreamFromReadable(body)
 
 					responseHeaders.set('Content-Type', 'text/html')
-					responseHeaders.set('X-Frame-Options', 'DENY')
+					if (new URL(request.url).pathname.startsWith('/demo')) {
+						responseHeaders.set(
+							'Content-Security-Policy',
+							`frame-ancestors 'self' ${DEMO_FRAME_ANCESTORS.join(' ')}`,
+						)
+					} else {
+						responseHeaders.set('X-Frame-Options', 'DENY')
+					}
 					responseHeaders.set('X-Content-Type-Options', 'nosniff')
 					responseHeaders.set(
 						'Referrer-Policy',

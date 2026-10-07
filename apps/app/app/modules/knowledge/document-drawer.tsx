@@ -23,6 +23,7 @@ import { Skeleton } from '~/components/arc/skeleton/skeleton'
 import { ToggleChip } from '~/components/toggle-chip'
 import { LANGUAGE_NAMES, formatMonth, fromNow } from '~/lib/format'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 
 const CLOSE_ANIMATION_MS = 250
 
@@ -31,6 +32,7 @@ export function DocumentDrawerModule() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const [open, setOpen] = useState(true)
+	const { path } = useAppBase()
 
 	const { data: document, isError, error } = useGetDocument(documentId)
 
@@ -39,7 +41,7 @@ export function DocumentDrawerModule() {
 		setTimeout(
 			() =>
 				navigate(
-					{ pathname: '/knowledge', search: location.search },
+					{ pathname: path('/knowledge'), search: location.search },
 					{ preventScrollReset: true },
 				),
 			CLOSE_ANIMATION_MS,
@@ -79,6 +81,7 @@ function DocumentDetails({
 	const { data: versions } = useGetDocumentVersions(document.id)
 	const setAccess = useSetDocumentAccess()
 	const removeDocument = useRemoveDocument()
+	const { path } = useAppBase()
 
 	const status = documentStatus(document)
 	const collection = collections?.find(
@@ -99,7 +102,7 @@ function DocumentDetails({
 
 	function askAbout() {
 		const draft = encodeURIComponent(`In ${document.name}, `)
-		void navigate(`/?mode=ASK&draft=${draft}`)
+		void navigate(`${path('/')}?mode=ASK&draft=${draft}`)
 	}
 
 	return (
@@ -172,7 +175,10 @@ function DocumentDetails({
 				</div>
 				<p className="text-muted text-[13px]">
 					Manage who is in each group in{' '}
-					<Link to="/settings/groups" className="text-accent hover:underline">
+					<Link
+						to={path('/settings/groups')}
+						className="text-accent hover:underline"
+					>
 						Settings, Groups
 					</Link>
 					.

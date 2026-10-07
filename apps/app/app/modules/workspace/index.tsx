@@ -3,16 +3,19 @@ import { useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Composer } from './composer'
 import { MODE_KEYS, MODES, isChatMode } from './modes'
+import { useDemoPlay } from './use-demo-play'
 import { useCreateChat } from '~/api/chats'
 import { useGetOrganization } from '~/api/organization'
 import { Alert } from '~/components/arc/alert/alert'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 
 export function WorkspaceModule() {
 	const [searchParams] = useSearchParams()
 	const navigate = useNavigate()
 	const { data: organization } = useGetOrganization()
 	const createChat = useCreateChat()
+	const { path, demo } = useAppBase()
 
 	const initialMode = searchParams.get('mode')
 	const [mode, setMode] = useState<ChatMode | null>(
@@ -21,12 +24,23 @@ export function WorkspaceModule() {
 	const [draft, setDraft] = useState(searchParams.get('draft') ?? '')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-	function send() {
+	function send(prompt = draft.trim(), chatMode = mode) {
 		createChat.mutate(
-			{ prompt: draft.trim(), mode },
-			{ onSuccess: (chat) => navigate(`/chats/${chat.id}`) },
+			{ prompt, mode: chatMode },
+			{
+				onSuccess: (chat) =>
+					navigate(path(`/chats/${chat.id}`), { replace: demo }),
+			},
 		)
 	}
+
+	useDemoPlay({
+		play: searchParams.get('play'),
+		enabled: demo,
+		onMode: setMode,
+		onType: setDraft,
+		onSend: send,
+	})
 
 	return (
 		<div className="flex flex-1 flex-col items-center justify-center overflow-auto px-4 pt-12 pb-16 md:px-10">
@@ -82,14 +96,14 @@ export function WorkspaceModule() {
 					variant="start"
 					value={draft}
 					onValueChange={setDraft}
-					onSubmit={send}
+					onSubmit={() => send()}
 					busy={createChat.isPending}
 					mode={mode}
 					onClearMode={() => setMode(null)}
 					placeholder={
 						mode ? MODES[mode].placeholder : 'Ask anything or describe a task…'
 					}
-					autoFocus
+					autoFocus={!demo}
 					textareaRef={textareaRef}
 				/>
 

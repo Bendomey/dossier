@@ -15,6 +15,7 @@ import { Skeleton } from '~/components/arc/skeleton/skeleton'
 import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { fromNow } from '~/lib/format'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 
 function Stats() {
 	const { data: stats } = useGetKnowledgeStats()
@@ -51,6 +52,7 @@ export function KnowledgeModule() {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const { documentId } = useParams()
 	const [uploadOpen, setUploadOpen] = useState(false)
+	const { path } = useAppBase()
 
 	const collectionId = searchParams.get('collection') ?? undefined
 	const view = searchParams.get('view') === 'templates' ? 'templates' : 'all'
@@ -201,7 +203,10 @@ export function KnowledgeModule() {
 								return (
 									<li key={document.id}>
 										<Link
-											to={{ pathname: `/knowledge/${document.id}`, search }}
+											to={{
+												pathname: path(`/knowledge/${document.id}`),
+												search,
+											}}
 											preventScrollReset
 											className={cn(
 												'border-border-subtle hover:bg-surface-muted desk:grid-cols-[minmax(0,2.4fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,1.1fr)_minmax(0,1fr)] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t px-5 py-3 text-sm transition-colors',

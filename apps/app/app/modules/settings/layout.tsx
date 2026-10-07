@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router'
 import { useGetOrganization } from '~/api/organization'
 import { motionTokens } from '~/components/arc/lib/motion-tokens'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 
 const TABS = [
 	{ to: '/settings/organization', label: 'Organization' },
@@ -20,6 +21,7 @@ export function SettingsLayoutModule({
 	const { data: organization } = useGetOrganization()
 	const { pathname } = useLocation()
 	const reduced = useReducedMotion()
+	const { path } = useAppBase()
 
 	return (
 		<div className="flex-1 overflow-auto px-4 pt-8 pb-16 md:px-10">
@@ -38,11 +40,11 @@ export function SettingsLayoutModule({
 					className="flex gap-1 overflow-x-auto border-b"
 				>
 					{TABS.map((tab) => {
-						const active = pathname.startsWith(tab.to)
+						const active = pathname.startsWith(path(tab.to))
 						return (
 							<NavLink
 								key={tab.to}
-								to={tab.to}
+								to={path(tab.to)}
 								className={cn(
 									'hover:text-foreground relative flex h-[42px] shrink-0 items-center px-3 text-sm whitespace-nowrap transition-colors',
 									active ? 'text-foreground' : 'text-secondary',

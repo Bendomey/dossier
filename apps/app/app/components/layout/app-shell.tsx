@@ -12,6 +12,7 @@ import { Drawer, DrawerContent } from '~/components/arc/drawer/drawer'
 import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { usePageTitle } from '~/hooks/use-page-title'
 import { plural } from '~/lib/format'
+import { useAppBase } from '~/providers/app-base-provider'
 import { useAuth } from '~/providers/auth-provider'
 
 function OrganizationBadge() {
@@ -54,6 +55,7 @@ function SignOutButton({ className }: { className?: string }) {
 function Sidebar() {
 	const { currentUser } = useAuth()
 	const navigate = useNavigate()
+	const { path, demo } = useAppBase()
 
 	return (
 		<aside className="desk:flex border-border hidden w-[264px] shrink-0 flex-col gap-1 border-r p-3">
@@ -61,7 +63,7 @@ function Sidebar() {
 			<Button
 				variant="secondary"
 				className="my-2 w-full"
-				onClick={() => navigate('/')}
+				onClick={() => navigate(path('/'))}
 			>
 				<Plus className="size-4" strokeWidth={1.75} />
 				New chat
@@ -79,8 +81,12 @@ function Sidebar() {
 						{currentUser.email}
 					</span>
 				</span>
-				<ThemeToggle />
-				<SignOutButton />
+				{demo ? null : (
+					<>
+						<ThemeToggle />
+						<SignOutButton />
+					</>
+				)}
 			</div>
 		</aside>
 	)
@@ -88,6 +94,7 @@ function Sidebar() {
 
 function MobileBar({ onOpenNav }: { onOpenNav: () => void }) {
 	const title = usePageTitle()
+	const { path } = useAppBase()
 
 	return (
 		<div className="desk:hidden border-border flex h-14 shrink-0 items-center gap-2 border-b px-3">
@@ -101,7 +108,7 @@ function MobileBar({ onOpenNav }: { onOpenNav: () => void }) {
 			</button>
 			<span className="flex-1 truncate text-[15px] font-medium">{title}</span>
 			<Link
-				to="/"
+				to={path('/')}
 				aria-label="New chat"
 				className="grid size-11 place-items-center rounded-[14px]"
 			>
@@ -119,6 +126,7 @@ function MobileNav({
 	onOpenChange: (open: boolean) => void
 }) {
 	const close = () => onOpenChange(false)
+	const { demo } = useAppBase()
 
 	return (
 		<Drawer open={open} onOpenChange={onOpenChange}>
@@ -128,10 +136,12 @@ function MobileNav({
 					<PrimaryNav size="lg" onNavigate={close} />
 					<RecentChats onNavigate={close} />
 					<SettingsNavItem size="lg" onNavigate={close} />
-					<div className="flex items-center justify-between pt-2">
-						<ThemeToggle />
-						<SignOutButton />
-					</div>
+					{demo ? null : (
+						<div className="flex items-center justify-between pt-2">
+							<ThemeToggle />
+							<SignOutButton />
+						</div>
+					)}
 				</div>
 			</DrawerContent>
 		</Drawer>

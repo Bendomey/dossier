@@ -45,7 +45,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	return data(
 		{
-			theme: await getTheme(request),
+			theme: new URL(request.url).pathname.startsWith('/demo')
+				? ('light' as const)
+				: await getTheme(request),
 			ENV: { API_ADDRESS: environmentVariables().API_ADDRESS },
 			utm,
 		},

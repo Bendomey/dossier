@@ -6,8 +6,9 @@ import {
 	TabsTrigger,
 } from '~/components/arc/tabs/tabs'
 import { Container } from '~/components/layout/container'
-import { APP_URL, PRODUCT_DEMO_URL } from '~/lib/constants'
+import { APP_URL } from '~/lib/constants'
 import { useTranslation } from '~/lib/i18n/use-translation'
+import { useAppUrl } from '~/lib/use-app-url'
 
 interface Props {
 	tab: DemoTab
@@ -16,6 +17,7 @@ interface Props {
 
 export function ProductDemo({ tab, onTabChange }: Props) {
 	const { t } = useTranslation()
+	const appUrl = useAppUrl()
 	const active = DEMO_TABS.find((item) => item.value === tab) ?? DEMO_TABS[0]
 
 	return (
@@ -48,17 +50,12 @@ export function ProductDemo({ tab, onTabChange }: Props) {
 					{DEMO_TABS.map((item) => (
 						<TabsContent key={item.value} value={item.value}>
 							<div className="bg-background h-[clamp(520px,68vw,680px)] overflow-hidden rounded-2xl border">
-								{PRODUCT_DEMO_URL ? (
-									<iframe
-										src={`${PRODUCT_DEMO_URL}?${item.query}`}
-										title={`Dossier: ${t(item.label)}`}
-										className="block size-full border-0"
-									/>
-								) : (
-									<div className="text-subtle grid size-full place-items-center text-sm">
-										{t(item.label)}
-									</div>
-								)}
+								<iframe
+									src={appUrl(item.demoPath, `home_demo_${item.value}`)}
+									loading="lazy"
+									title={`Dossier: ${t(item.label)}`}
+									className="block size-full border-0"
+								/>
 							</div>
 						</TabsContent>
 					))}
