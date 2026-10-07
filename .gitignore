@@ -1,0 +1,19 @@
+.DS_Store
+
+.envrc
+.env
+.env.json
+
+yarn.lock
+!apps/website/yarn.lock
+node_modules
+
+.idea
+
+# Git worktrees
+.worktrees/
+.superpowers/
+
+# Claude Code local settings & agent worktrees
+.claude/settings.local.json
+.claude/worktrees/

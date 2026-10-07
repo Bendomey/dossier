@@ -1,0 +1,66 @@
+name: Website
+
+on:
+  push:
+    paths:
+      - 'apps/website/**'
+      - '.github/workflows/website.yml'
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'apps/website/**'
+      - '.github/workflows/website.yml'
+  workflow_dispatch:
+
+jobs:
+  code-checks:
+    name: ⬣ ESLint & ʦ TypeScript
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/website
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+          cache-dependency-path: 'apps/website/yarn.lock'
+
+      - name: 📥 Download deps
+        run: yarn install --frozen-lockfile
+
+      - name: 🔬 Lint
+        run: yarn lint:ci
+
+      - name: 🔎 Type check
+        run: yarn types:check
+
+  deploy:
+    name: 🚀 Deploy
+    needs: code-checks
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: deploy-website
+
+    defaults:
+      run:
+        working-directory: apps/website
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🎈 Setup Fly
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: 🚀 Deploy
+        run: flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@import './components/arc/foundation.css';
+
+@font-face {
+	font-family: 'Klarheit';
+	src:
+		local('Klarheit Grotesk'), local('KlarheitGrotesk-Regular'),
+		local('Klarheit');
+	font-weight: 100 900;
+}
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Arc's foundation.css owns the shared tokens (--background, --foreground,
+ * --border, --accent, ...). The shadcn-only tokens below derive from Arc's so
+ * both component sets theme together. Tailwind's `accent` maps to a muted
+ * surface because shadcn uses it for hover fills, while Arc's --accent is the
+ * brand color.
+ */
+:root {
+	--font-geist: 'Geist';
+	--font-inter: 'Geist';
+	--font-heading: 'Klarheit', 'Geist', system-ui, sans-serif;
+	--font-code: 'Geist Mono', ui-monospace, monospace;
+
+	--foreground: #0c0d0f;
+	--text-secondary: #4a4d55;
+	--text-muted: #6b6e76;
+	--border: #ececee;
+	--border-strong: #e4e4e7;
+	--surface-muted: #fafafa;
+	--accent: #1d3fbf;
+	--accent-subtle: color-mix(in oklch, var(--accent) 9%, white);
+	--radius-control: var(--radius-pill);
+	--radius: 0.625rem;
+	--card: var(--surface);
+	--card-foreground: var(--foreground);
+	--popover: var(--surface-raised);
+	--popover-foreground: var(--foreground);
+	--primary: var(--neutral-10);
+	--primary-foreground: var(--neutral-0);
+	--secondary: var(--surface-muted);
+	--secondary-foreground: var(--foreground);
+	--muted: var(--surface-muted);
+	--muted-foreground: var(--text-secondary);
+	--destructive: var(--danger);
+	--input: var(--border-strong);
+	--ring: var(--neutral-6);
+}
+
+:root[data-theme='dark'] {
+	--accent: #7d97ff;
+	--accent-subtle: color-mix(in oklch, var(--accent) 16%, black);
+	--primary: var(--neutral-1);
+	--primary-foreground: var(--neutral-10);
+}
+
+@theme inline {
+	--font-sans: var(--font-body);
+	--font-display: var(--font-display);
+	--font-heading: var(--font-heading);
+	--font-mono: var(--font-code);
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-surface: var(--surface);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--surface-muted);
+	--color-accent-foreground: var(--foreground);
+	--color-brand: var(--accent);
+	--color-brand-soft: var(--accent-subtle);
+	--color-subtle: var(--text-muted);
+	--color-destructive: var(--destructive);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	body {
+		@apply bg-background text-foreground font-sans;
+	}
+	::selection {
+		background: var(--accent-subtle);
+	}
+}
+
+#nprogress {
+	pointer-events: none;
+}
+
+#nprogress .bar {
+	background: var(--foreground);
+	position: fixed;
+	z-index: 1031;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 2px;
+}
