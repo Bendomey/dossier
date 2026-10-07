@@ -6,7 +6,7 @@ import {
 	TabsTrigger,
 } from '~/components/arc/tabs/tabs'
 import { Container } from '~/components/layout/container'
-import { PRODUCT_DEMO_URL } from '~/lib/constants'
+import { APP_URL, PRODUCT_DEMO_URL } from '~/lib/constants'
 import { useTranslation } from '~/lib/i18n/use-translation'
 
 interface Props {
@@ -41,7 +41,7 @@ export function ProductDemo({ tab, onTabChange }: Props) {
 							<span className="size-2.5 rounded-full bg-[#e4e4e7] dark:bg-white/15" />
 						</span>
 						<span className="text-subtle flex-1 text-center text-xs">
-							app.dossier.africa
+							{new URL(APP_URL).host}
 						</span>
 						<span className="w-[42px]" />
 					</div>

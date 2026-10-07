@@ -6,6 +6,7 @@
 
 yarn.lock
 !apps/website/yarn.lock
+!apps/app/yarn.lock
 node_modules
 
 .idea

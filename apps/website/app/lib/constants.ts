@@ -1,16 +1,17 @@
 export const NODE_ENV = process.env.NODE_ENV
 export const APP_NAME = 'dossier'
+/** Temporary Fly.io hosts until the dossier domain is secured. */
 export const APP_DOMAIN =
-	NODE_ENV === 'production' ? 'dossier.africa' : 'localhost'
+	NODE_ENV === 'production' ? 'dossier.fly.dev' : 'localhost'
 
-export const APP_URL = '#'
+export const APP_URL = 'https://dossier-africa.fly.dev'
 
 export const CONTACT_EMAIL = 'hello@dossier.africa'
 export const WHATSAPP_NUMBER = '+233 00 000 0000'
 
 /**
  * Base URL of the live product the home page demo embeds, e.g.
- * `https://app.dossier.africa/demo`. While empty, the demo shows a placeholder.
+ * `${APP_URL}/demo`. While empty, the demo shows a placeholder.
  */
 export const PRODUCT_DEMO_URL = ''
 

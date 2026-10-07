@@ -3,6 +3,7 @@ import './app.css'
 import dayjs from 'dayjs'
 import localizedFormat from 'dayjs/plugin/localizedFormat.js'
 import {
+	data,
 	isRouteErrorResponse,
 	Links,
 	Meta,
@@ -19,6 +20,7 @@ import { environmentVariables } from './lib/actions/env.server'
 import { getLanguage } from './lib/i18n/language.server'
 import { DEFAULT_LANGUAGE } from './lib/i18n/languages'
 import { getMessages } from './lib/i18n/translate.server'
+import { resolveUtm } from './lib/utm.server'
 import { NotFoundModule } from './modules/404-page'
 import { Providers } from './providers'
 
@@ -45,15 +47,20 @@ export const links: Route.LinksFunction = () => [
 export async function loader({ request }: Route.LoaderArgs) {
 	const env = environmentVariables()
 	const language = await getLanguage(request)
+	const { utm, setCookie } = await resolveUtm(request)
 
-	return {
-		ENV: {
-			API_ADDRESS: env.API_ADDRESS,
-			GOOGLE_ANALYTICS_ID: env.GOOGLE_ANALYTICS_ID,
+	return data(
+		{
+			ENV: {
+				API_ADDRESS: env.API_ADDRESS,
+				GOOGLE_ANALYTICS_ID: env.GOOGLE_ANALYTICS_ID,
+			},
+			language,
+			messages: await getMessages(language),
+			utm,
 		},
-		language,
-		messages: await getMessages(language),
-	}
+		setCookie ? { headers: { 'Set-Cookie': setCookie } } : undefined,
+	)
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {

@@ -18,18 +18,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 /apps
-└── website/             Public marketing website (port 3000)
+├── website/             Public marketing website (port 3000)
+└── app/                 The product: workspace, knowledge, settings (port 3001)
 ```
 
 ## Common Commands
 
 ### Root Level
 ```bash
-make run          # Run the website and open the browser
+make run          # Run the website and the app
 make run-website  # Website only
+make run-app      # App only
 ```
 
-### Website (apps/website)
+### Website and app (apps/website, apps/app)
 ```bash
 yarn dev          # Development server (port 3000)
 yarn build        # Production build
@@ -82,6 +84,39 @@ app/
 - Other languages are generated server-side from the English dictionary with the Google Cloud Translation API (`app/lib/i18n/translate.server.ts`), cached in memory per language. Without `GOOGLE_TRANSLATE_API_KEY` the site serves English
 - Brand terms that must not be translated go in `PROTECTED_TERMS`. Plan names and numbers stay as literals outside the dictionary
 
+## App Architecture (apps/app)
+
+Follows the rentloop property-manager conventions.
+
+**Structure:**
+```
+app/
+├── api/<resource>/   Fetchers + TanStack Query hooks (useGetX, useCreateX). Mutations invalidate what they change
+├── routes/           Thin route files: loader/action, meta, handle.title, default export from ~/modules
+├── modules/          Page UI (auth, workspace, knowledge, settings, error)
+├── components/arc/   Arc UI (installed via shadcn, do not edit internals)
+├── components/       Shared app components (layout shell, form controls, toggle chip)
+├── lib/actions/      Server-only: env, cookie session, auth middleware, theme cookie
+├── lib/mock/         In-browser stand-in for the API (seed data, scripted replies, store)
+└── providers/        React Query, Auth
+types/                Global domain types (*.d.ts)
+```
+
+**Key patterns:**
+- Auth: `routes/_auth.tsx` runs `authMiddleware` (React Router v8 middleware) for every signed-in page; it redirects to `/login?return_to=…`. The session is a signed cookie (`SESSION_SECRET`)
+- No backend yet: `app/api/*` call `~/lib/mock/db`. When the API lands, replace each fetcher body with a `fetchClient`/`fetchServer` call; hooks and components stay as they are
+- Chat replies stream through `useReplyStream`, which writes `ChatStreamEvent`s into the query cache. The real endpoint should emit the same events (server-sent events)
+- Documents that are processing are polled with `refetchInterval` until ready
+- URL state for filters (`/knowledge?collection=…&view=templates&q=…`) and drawers (`/knowledge/:documentId`)
+- Theme: `theme` cookie (`light` | `dark` | `system`), `data-theme` on `<html>`
+
+## Links Between the Website and the App
+
+- Every link from one app to the other MUST carry UTM parameters. Build it with `useAppUrl()` (website, `~/lib/use-app-url`) or `useWebsiteUrl()` (app, `~/lib/use-website-url`), passing a `placement` that names the link (e.g. `header_sign_in`). Server code uses `crossAppUrl()` from `~/lib/utm` with `resolveUtm()` from `~/lib/utm.server`
+- Both apps remember incoming campaign parameters in a 30-day `utm` cookie. Source, medium, campaign and term pass through; `utm_content` is always the clicked link; missing values default to `dossier_website` / `dossier_app` and `cross_app`
+- Never leave personal data in a URL: the website hands the sign-up email over as `?email=`, and the app's `/signup` loader moves it into a one-time flash and redirects to a clean URL
+- Hosts live in `APP_URL` (website constants) and `WEBSITE_URL` (app constants): currently https://dossier-africa.fly.dev and https://dossier.fly.dev
+
 ## Website Versioning
 
 **Always bump the `version` field in `apps/website/package.json` whenever any changes are made to the website** (`apps/website/`). Use semantic versioning:
@@ -104,9 +139,9 @@ When adding a new publicly accessible page to `apps/website`:
 
 ## Deployment
 
-- **Platform:** Fly.io, one environment (`apps/website/fly.toml`, app `dossier`)
-- **CI/CD:** `.github/workflows/website.yml`. Pull requests run lint and type checks; every push to `main` runs the checks and, only if they pass, deploys. There is no staging environment or `prod` branch
-- **Manual deploy:** `make deploy` from `apps/website` (or run the workflow manually from the Actions tab)
+- **Platform:** Fly.io, one environment per app: `apps/website/fly.toml` (app `dossier`), `apps/app/fly.toml` (app `dossier-africa`)
+- **CI/CD:** `.github/workflows/website.yml` and `.github/workflows/app.yml`. Pull requests run lint and type checks; every push to `main` runs the checks and, only if they pass, deploys. There is no staging environment or `prod` branch
+- **Manual deploy:** `make deploy` from the app's folder (or run the workflow manually from the Actions tab)
 - **Secrets:** runtime env vars (`GOOGLE_TRANSLATE_API_KEY`, `GOOGLE_ANALYTICS_ID`, `API_ADDRESS`) are set with `fly secrets set`, never committed. CI needs a `FLY_API_TOKEN` repository secret
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->

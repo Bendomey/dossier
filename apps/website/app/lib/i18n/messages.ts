@@ -108,7 +108,6 @@ export const messages = {
 	'home.access.body':
 		'We’re onboarding a small group of companies this quarter.',
 	'home.access.emailLabel': 'Work email',
-	'home.access.thanks': 'Thanks. We’ll be in touch at',
 	'home.access.invalidEmail': 'Enter a valid work email',
 	'home.access.talkFirst': 'Prefer to talk first?',
 	'home.access.builtIn': 'Built in Accra.',

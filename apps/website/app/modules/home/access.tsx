@@ -1,4 +1,4 @@
-import { useActionData, useFetcher } from 'react-router'
+import { Form, useActionData, useNavigation } from 'react-router'
 import { Button } from '~/components/arc/button/button'
 import { Container } from '~/components/layout/container'
 import { CONTACT_EMAIL, WHATSAPP_NUMBER } from '~/lib/constants'
@@ -7,10 +7,10 @@ import type { action } from '~/routes/_index'
 
 export function Access() {
 	const { t } = useTranslation()
-	const fetcher = useFetcher<typeof action>()
-	const submitting = fetcher.state !== 'idle'
-	const actionData = useActionData<typeof action>()
-	const result = fetcher.data ?? actionData
+	const navigation = useNavigation()
+	const submitting =
+		navigation.state !== 'idle' && navigation.formMethod === 'POST'
+	const result = useActionData<typeof action>()
 
 	return (
 		<section id="access" className="scroll-mt-16 border-t">
@@ -22,39 +22,28 @@ export function Access() {
 				<p className="text-muted-foreground mt-6 mb-10 text-[17px]">
 					{t('home.access.body')}
 				</p>
-				{result?.ok ? (
-					<p
-						role="status"
-						className="border-input w-full max-w-[460px] rounded-full border px-6 py-4 text-[15px]"
-					>
-						{t('home.access.thanks')} {result.email}.
-					</p>
-				) : (
-					<fetcher.Form
-						method="post"
-						className="border-input focus-within:border-foreground flex w-full max-w-[460px] gap-2 rounded-full border p-1.5 transition-colors"
-					>
-						<label htmlFor="access-email" className="sr-only">
-							{t('home.access.emailLabel')}
-						</label>
-						<input
-							id="access-email"
-							name="email"
-							type="email"
-							required
-							autoComplete="email"
-							placeholder={t('home.access.emailLabel')}
-							aria-invalid={result?.error ? true : undefined}
-							aria-describedby={
-								result?.error ? 'access-email-error' : undefined
-							}
-							className="placeholder:text-subtle min-w-0 flex-1 border-0 bg-transparent px-4 text-[15px] outline-none"
-						/>
-						<Button type="submit" loading={submitting}>
-							{t('nav.startFree')}
-						</Button>
-					</fetcher.Form>
-				)}
+				<Form
+					method="post"
+					className="border-input focus-within:border-foreground flex w-full max-w-[460px] gap-2 rounded-full border p-1.5 transition-colors"
+				>
+					<label htmlFor="access-email" className="sr-only">
+						{t('home.access.emailLabel')}
+					</label>
+					<input
+						id="access-email"
+						name="email"
+						type="email"
+						required
+						autoComplete="email"
+						placeholder={t('home.access.emailLabel')}
+						aria-invalid={result?.error ? true : undefined}
+						aria-describedby={result?.error ? 'access-email-error' : undefined}
+						className="placeholder:text-subtle min-w-0 flex-1 border-0 bg-transparent px-4 text-[15px] outline-none"
+					/>
+					<Button type="submit" loading={submitting}>
+						{t('nav.startFree')}
+					</Button>
+				</Form>
 				{result?.error ? (
 					<p
 						id="access-email-error"

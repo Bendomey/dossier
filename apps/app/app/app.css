@@ -1,0 +1,139 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import './components/arc/foundation.css';
+
+@font-face {
+	font-family: 'Klarheit';
+	src:
+		local('Klarheit Grotesk'), local('KlarheitGrotesk-Regular'),
+		local('Klarheit');
+	font-weight: 100 900;
+}
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * The design's palette maps one to one onto Arc's semantic tokens, so Arc
+ * components and the app's own Tailwind classes share a single source.
+ * Selectors match foundation.css specificity and win by coming later.
+ */
+:root {
+	--font-geist: 'Geist';
+	--font-inter: 'Geist';
+	--font-heading: 'Klarheit', 'Geist', system-ui, sans-serif;
+	--font-code: 'Geist Mono', ui-monospace, monospace;
+
+	--background: #ffffff;
+	--surface: #ffffff;
+	--surface-raised: #ffffff;
+	--surface-muted: #f5f5f6;
+	--foreground: #111113;
+	--text-secondary: #5c5e66;
+	--text-muted: #8a8c93;
+	--border: #e7e7ea;
+	--border-subtle: #f0f0f2;
+	--border-strong: #d3d3d8;
+	--accent: #1d3fbf;
+	--accent-strong: #15309a;
+	--accent-subtle: #eef1fb;
+	--success: #1a7f45;
+	--warning: #a86300;
+	--danger: #c2352b;
+	--shadow-floating:
+		0 1px 2px rgba(17, 17, 19, 0.04), 0 12px 32px -8px rgba(17, 17, 19, 0.16);
+	--scrim: rgba(17, 17, 19, 0.28);
+	--radius-control: var(--radius-pill);
+	--control-on: var(--accent);
+	--control-thumb-on: #ffffff;
+	--control-glyph: #ffffff;
+}
+
+:root[data-theme='dark'] {
+	--background: #0c0c0e;
+	--surface: #141417;
+	--surface-raised: #1a1a1e;
+	--surface-muted: #1c1c20;
+	--foreground: #f4f4f5;
+	--text-secondary: #a3a3ab;
+	--text-muted: #74747c;
+	--border: #26262b;
+	--border-subtle: #1f1f24;
+	--border-strong: #37373e;
+	--accent: #7d97ff;
+	--accent-strong: #a9baff;
+	--accent-subtle: rgba(120, 150, 255, 0.14);
+	--success: #3fbf74;
+	--warning: #e0a23b;
+	--danger: #ef6b5f;
+	--shadow-floating: 0 12px 40px -8px rgba(0, 0, 0, 0.6);
+	--scrim: rgba(0, 0, 0, 0.55);
+	--control-on: #5b78f0;
+	--control-thumb-on: #ffffff;
+	--control-glyph: #ffffff;
+}
+
+@theme {
+	--breakpoint-desk: 821px;
+}
+
+@theme inline {
+	--font-sans: var(--font-body);
+	--font-heading: var(--font-heading);
+	--font-mono: var(--font-code);
+
+	--color-background: var(--background);
+	--color-surface: var(--surface);
+	--color-surface-raised: var(--surface-raised);
+	--color-surface-muted: var(--surface-muted);
+	--color-foreground: var(--foreground);
+	--color-secondary: var(--text-secondary);
+	--color-muted: var(--text-muted);
+	--color-border: var(--border);
+	--color-border-subtle: var(--border-subtle);
+	--color-border-strong: var(--border-strong);
+	--color-accent: var(--accent);
+	--color-accent-subtle: var(--accent-subtle);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-danger: var(--danger);
+	--color-scrim: var(--scrim);
+
+	--shadow-floating: var(--shadow-floating);
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	html {
+		color-scheme: light;
+	}
+	html[data-theme='dark'] {
+		color-scheme: dark;
+	}
+	body {
+		@apply bg-background text-foreground font-sans antialiased;
+		letter-spacing: -0.01em;
+	}
+	::selection {
+		background: var(--accent-subtle);
+	}
+	textarea::placeholder,
+	input::placeholder {
+		color: var(--text-muted);
+	}
+}
+
+#nprogress {
+	pointer-events: none;
+}
+
+#nprogress .bar {
+	background: var(--accent);
+	position: fixed;
+	z-index: 1031;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 2px;
+}

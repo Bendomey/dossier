@@ -1,0 +1,9 @@
+.react-router
+build
+node_modules
+.env
+.env.*
+!.env.example
+README.md
+fly.toml
+Makefile

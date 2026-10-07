@@ -1,5 +1,7 @@
+import { redirect } from 'react-router'
 import * as z from 'zod'
 import type { Route } from './+types/_index'
+import { APP_URL } from '~/lib/constants'
 import { getMetaMessages } from '~/lib/i18n/use-translation'
 import { getDisplayUrl, getDomainUrl } from '~/lib/misc'
 import {
@@ -8,6 +10,9 @@ import {
 	getWebsiteSchema,
 	pageKeywords,
 } from '~/lib/seo'
+import { WEBSITE_UTM_SOURCE } from '~/lib/use-app-url'
+import { crossAppUrl } from '~/lib/utm'
+import { resolveUtm } from '~/lib/utm.server'
 import { Home } from '~/modules'
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -25,11 +30,18 @@ export async function action({ request }: Route.ActionArgs) {
 	const parsed = accessSchema.safeParse({ email: formData.get('email') })
 
 	if (!parsed.success) {
-		return { ok: false as const, error: true }
+		return { error: true }
 	}
 
-	// TODO: send the sign-up to the API once the endpoint exists.
-	return { ok: true as const, email: parsed.data.email }
+	const { utm } = await resolveUtm(request)
+	throw redirect(
+		crossAppUrl(APP_URL, '/signup', {
+			utm,
+			source: WEBSITE_UTM_SOURCE,
+			placement: 'access_form',
+			params: { email: parsed.data.email },
+		}),
+	)
 }
 
 export function meta({ loaderData, location, matches }: Route.MetaArgs) {

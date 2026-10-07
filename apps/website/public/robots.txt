@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://dossier.africa/sitemap.xml
+Sitemap: https://dossier.fly.dev/sitemap.xml
 
 # Disallow admin/api routes
 Disallow: /api/

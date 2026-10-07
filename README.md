@@ -4,12 +4,14 @@ dossier
 
 ## Run
 
-> Run the website with make
+> Run the website and the app with make
 > `make run`
 
 ## Structure
 
 `apps/website` — Public marketing website (React Router v7, port 3000)
+
+`apps/app` — The product: workspace chat, company knowledge and settings (React Router v7, port 3001). Frontend only for now, backed by a mock API
 
 ## Tech Stack
 

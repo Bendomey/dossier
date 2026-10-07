@@ -1,0 +1,19 @@
+export const NODE_ENV = process.env.NODE_ENV
+export const APP_NAME = 'Dossier'
+/** Temporary Fly.io host until the dossier domain is secured. */
+export const WEBSITE_URL = 'https://dossier.fly.dev'
+export const SESSION_COOKIE = 'dossier-session'
+
+export const QUERY_KEYS = {
+	ORGANIZATION: 'organization',
+	GROUPS: 'groups',
+	COLLECTIONS: 'collections',
+	DOCUMENTS: 'documents',
+	DOCUMENT_VERSIONS: 'document-versions',
+	KNOWLEDGE_STATS: 'knowledge-stats',
+	MEMBERS: 'members',
+	CHATS: 'chats',
+	BILLING: 'billing',
+	INVOICES: 'invoices',
+	AUDIT_EVENTS: 'audit-events',
+} as const

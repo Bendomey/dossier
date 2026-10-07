@@ -4,9 +4,9 @@ import { Link, NavLink } from 'react-router'
 import { Container } from './container'
 import { LanguageSelect } from './language-select'
 import { Logo } from './logo'
-import { APP_URL } from '~/lib/constants'
 import { type MessageKey } from '~/lib/i18n/messages'
 import { useTranslation } from '~/lib/i18n/use-translation'
+import { useAppUrl } from '~/lib/use-app-url'
 import { cn } from '~/lib/utils'
 
 const NAV_LINKS: Array<{ key: MessageKey; href: string }> = [
@@ -19,6 +19,7 @@ const NAV_LINKS: Array<{ key: MessageKey; href: string }> = [
 export function Header() {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const { t } = useTranslation()
+	const appUrl = useAppUrl()
 
 	return (
 		<header className="bg-background/90 sticky top-0 z-10 border-b backdrop-blur-md">
@@ -48,7 +49,7 @@ export function Header() {
 				<div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
 					<LanguageSelect />
 					<a
-						href={APP_URL}
+						href={appUrl('/login', 'header_sign_in')}
 						className="text-muted-foreground hover:text-brand hidden px-2 md:block"
 					>
 						{t('nav.signIn')}
@@ -76,22 +77,26 @@ export function Header() {
 			</Container>
 			{menuOpen ? (
 				<nav className="bg-background animate-in fade-in slide-in-from-top-2 flex flex-col border-t px-5 pt-2 pb-6 duration-250 md:hidden">
-					{[...NAV_LINKS, { key: 'nav.signIn' as const, href: APP_URL }].map(
-						(link, index, links) => (
-							<Link
-								key={link.key}
-								to={link.href}
-								onClick={() => setMenuOpen(false)}
-								className={cn(
-									'py-4 text-[17px]',
-									index < links.length - 1 &&
-										'border-b border-[#f0f0f2] dark:border-white/5',
-								)}
-							>
-								{t(link.key)}
-							</Link>
-						),
-					)}
+					{[
+						...NAV_LINKS,
+						{
+							key: 'nav.signIn' as const,
+							href: appUrl('/login', 'mobile_menu_sign_in'),
+						},
+					].map((link, index, links) => (
+						<Link
+							key={link.key}
+							to={link.href}
+							onClick={() => setMenuOpen(false)}
+							className={cn(
+								'py-4 text-[17px]',
+								index < links.length - 1 &&
+									'border-b border-[#f0f0f2] dark:border-white/5',
+							)}
+						>
+							{t(link.key)}
+						</Link>
+					))}
 				</nav>
 			) : null}
 		</header>
