@@ -15,4 +15,7 @@ export const QUERY_KEYS = {
 	BILLING: 'billing',
 	INVOICES: 'invoices',
 	AUDIT_EVENTS: 'audit-events',
+	PEOPLE_PAGES: 'people-pages',
+	GROUP_PAGES: 'group-pages',
+	AUDIT_PAGES: 'audit-pages',
 } as const

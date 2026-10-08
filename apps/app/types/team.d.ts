@@ -42,6 +42,11 @@ interface PendingInvitation {
 
 interface PeopleOverview {
 	members: OrganizationPerson[]
+	/** The membership to continue after; null on the last page. */
+	next_cursor: string | null
+	/** First page only, like invitations and groups. */
+	total_members: number
+	role_counts: Record<MemberRole, number>
 	invitations: PendingInvitation[]
 	groups: Array<{ id: string; name: string; is_system: boolean }>
 }
@@ -57,4 +62,6 @@ interface GroupsOverview {
 	}>
 	members: Array<{ membership_id: string; name: string; role: MemberRole }>
 	collections: Array<{ id: string; name: string }>
+	/** The group to continue after; null on the last page. */
+	next_cursor: string | null
 }

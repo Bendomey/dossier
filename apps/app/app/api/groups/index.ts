@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfinitePages } from '~/hooks/use-infinite-pages'
 import { QUERY_KEYS } from '~/lib/constants'
 import * as api from '~/lib/mock/db'
 
@@ -43,3 +44,14 @@ export const useDeleteGroup = () => {
 		onSuccess: invalidate,
 	})
 }
+
+/** Settings, Groups: the loader's first page, then 50 more groups per scroll. */
+export const useGetGroupPages = (
+	first: GroupsOverview,
+	organizationId: string,
+) =>
+	useInfinitePages({
+		queryKey: [QUERY_KEYS.GROUP_PAGES, organizationId],
+		first,
+		url: (cursor) => `/api/groups${cursor ? `?before=${cursor}` : ''}`,
+	})

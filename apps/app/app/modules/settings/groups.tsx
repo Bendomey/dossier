@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useFetcher, useLoaderData } from 'react-router'
+import { useGetGroupPages } from '~/api/groups'
 import { Alert } from '~/components/arc/alert/alert'
 import { Button } from '~/components/arc/button/button'
 import {
@@ -17,7 +18,9 @@ import {
 } from '~/components/arc/drawer/drawer'
 import { Input } from '~/components/arc/input/input'
 import { TextInput } from '~/components/form-controls'
+import { LoadMore } from '~/components/load-more'
 import { ToggleChip } from '~/components/toggle-chip'
+import { useHeldValue } from '~/hooks/use-held-value'
 import { plural } from '~/lib/format'
 import { cn } from '~/lib/utils'
 import { useSession } from '~/providers/session-provider'
@@ -46,7 +49,11 @@ function SavingChip({
 }) {
 	const fetcher = useFetcher<GroupsActionResult>({ key: fetcherKey })
 	const pending = fetcher.formData?.get(valueField)
-	const shown = pending == null ? pressed : pending === 'true'
+	const shown = useHeldValue(
+		pending == null ? undefined : pending === 'true',
+		pressed,
+		fetcher.state === 'idle' && Boolean(fetcher.data?.error),
+	)
 
 	return (
 		<span className="inline-flex flex-col items-start gap-1">
@@ -75,18 +82,24 @@ function RenameField({ group }: { group: GroupItem }) {
 	const fetcher = useFetcher<GroupsActionResult>({
 		key: `group-rename:${group.id}`,
 	})
-	const [name, setName] = useState(group.name)
+	const submitted = fetcher.formData?.get('name')
+	const savedName = useHeldValue(
+		typeof submitted === 'string' ? submitted.trim() : undefined,
+		group.name,
+		fetcher.state === 'idle' && Boolean(fetcher.data?.error),
+	)
+	const [name, setName] = useState(savedName)
 	const saving = fetcher.state !== 'idle'
 	const trimmed = name.trim()
-	const changed = trimmed !== group.name
+	const changed = trimmed !== savedName
 
-	useEffect(() => setName(group.name), [group.name])
+	useEffect(() => setName(savedName), [savedName])
 
 	return (
 		<fetcher.Form
 			method="post"
 			className="flex max-w-[480px] flex-col gap-1.5"
-			onReset={() => setName(group.name)}
+			onReset={() => setName(savedName)}
 		>
 			<input type="hidden" name="intent" value="rename" />
 			<input type="hidden" name="group_id" value={group.id} />
@@ -439,8 +452,11 @@ function GroupRow({
 }
 
 export function GroupsSettingsModule() {
-	const { groups } = useLoaderData() as GroupsOverview
-	const { can } = useSession()
+	const overview = useLoaderData() as GroupsOverview
+	const { can, organization } = useSession()
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+		useGetGroupPages(overview, organization.id)
+	const groups = data.pages.flatMap((page) => page.groups)
 	const [openGroupId, setOpenGroupId] = useState<string | null>(null)
 
 	return (
@@ -465,6 +481,13 @@ export function GroupsSettingsModule() {
 						}
 					/>
 				))}
+				<LoadMore
+					as="li"
+					hasMore={hasNextPage}
+					loading={isFetchingNextPage}
+					onLoadMore={() => void fetchNextPage()}
+					label="Loading more groups…"
+				/>
 			</ul>
 		</div>
 	)

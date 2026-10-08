@@ -3,7 +3,15 @@ import { pageTitle } from '~/lib/seo'
 import { PeopleSettingsModule } from '~/modules'
 
 export function loader(): PeopleOverview {
+	const members = MEMBERS.filter((member) => !member.invited)
 	return {
+		next_cursor: null,
+		total_members: members.length,
+		role_counts: {
+			OWNER: members.filter((member) => member.role === 'OWNER').length,
+			ADMIN: members.filter((member) => member.role === 'ADMIN').length,
+			MEMBER: members.filter((member) => member.role === 'MEMBER').length,
+		},
 		members: MEMBERS.filter((member) => !member.invited).map((member) => ({
 			membership_id: member.id,
 			user_id: member.id,

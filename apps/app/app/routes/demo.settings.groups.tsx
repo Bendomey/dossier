@@ -27,6 +27,7 @@ export function loader(): GroupsOverview {
 			id: collection.id,
 			name: collection.name,
 		})),
+		next_cursor: null,
 	}
 }
 

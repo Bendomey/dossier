@@ -11,7 +11,6 @@ export function loader({ request, context }: Route.LoaderArgs) {
 	const category = params.get('category')?.toUpperCase()
 	return listAuditEntries(session.organization.id, {
 		category: isAuditCategory(category) ? category : undefined,
-		before: params.get('before'),
 	})
 }
 

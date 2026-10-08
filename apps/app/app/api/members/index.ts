@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfinitePages } from '~/hooks/use-infinite-pages'
 import { QUERY_KEYS } from '~/lib/constants'
 import * as api from '~/lib/mock/db'
 
@@ -36,3 +37,14 @@ export const useUpdateMember = () => {
 		onSuccess: invalidate,
 	})
 }
+
+/** Settings, People: the loader's first page, then 50 more members per scroll. */
+export const useGetPeoplePages = (
+	first: PeopleOverview,
+	organizationId: string,
+) =>
+	useInfinitePages({
+		queryKey: [QUERY_KEYS.PEOPLE_PAGES, organizationId],
+		first,
+		url: (cursor) => `/api/people${cursor ? `?before=${cursor}` : ''}`,
+	})

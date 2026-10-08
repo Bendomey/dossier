@@ -21,32 +21,47 @@ const isUniqueViolation = (error: unknown) =>
 	error instanceof Prisma.PrismaClientKnownRequestError &&
 	error.code === 'P2002'
 
+const PAGE_SIZE = 50
+
+/**
+ * Groups settings, 50 groups at a time (Everyone first, then by name). The
+ * members and collections the chips offer come with the first page only.
+ */
 export async function getGroupsOverview(
 	organizationId: string,
+	options: { before?: string | null } = {},
 ): Promise<GroupsOverview> {
+	const firstPage = !options.before
 	const [groups, members, collections] = await Promise.all([
 		db().group.findMany({
 			where: { organizationId },
-			orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+			orderBy: [{ isSystem: 'desc' }, { name: 'asc' }, { id: 'asc' }],
+			take: PAGE_SIZE + 1,
+			...(options.before ? { cursor: { id: options.before }, skip: 1 } : {}),
 			include: {
 				members: { select: { membershipId: true } },
 				collections: { select: { collectionId: true } },
 			},
 		}),
-		db().organizationMember.findMany({
-			where: { organizationId, status: 'ACTIVE' },
-			orderBy: { joinedAt: 'asc' },
-			include: { user: true, roles: { include: { role: true } } },
-		}),
-		db().collection.findMany({
-			where: { organizationId },
-			orderBy: { name: 'asc' },
-			select: { id: true, name: true },
-		}),
+		firstPage
+			? db().organizationMember.findMany({
+					where: { organizationId, status: 'ACTIVE' },
+					orderBy: { joinedAt: 'asc' },
+					include: { user: true, roles: { include: { role: true } } },
+				})
+			: [],
+		firstPage
+			? db().collection.findMany({
+					where: { organizationId },
+					orderBy: { name: 'asc' },
+					select: { id: true, name: true },
+				})
+			: [],
 	])
 
+	const page = groups.slice(0, PAGE_SIZE)
 	return {
-		groups: groups.map((group) => ({
+		groups: page.map((group) => ({
 			id: group.id,
 			name: group.name,
 			is_system: group.isSystem,
@@ -59,6 +74,7 @@ export async function getGroupsOverview(
 			role: highestRole(member.roles.map(({ role }) => role.name)),
 		})),
 		collections,
+		next_cursor: groups.length > PAGE_SIZE ? page.at(-1)!.id : null,
 	}
 }
 

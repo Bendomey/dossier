@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useFetcher, useLoaderData } from 'react-router'
+import { useGetPeoplePages } from '~/api/members'
 import { Alert } from '~/components/arc/alert/alert'
 import { Avatar } from '~/components/arc/avatar/avatar'
 import { Badge } from '~/components/arc/badge/badge'
@@ -11,7 +12,9 @@ import {
 	DialogTrigger,
 } from '~/components/arc/dialog/dialog'
 import { NativeSelect, TextInput } from '~/components/form-controls'
+import { LoadMore } from '~/components/load-more'
 import { ToggleChip } from '~/components/toggle-chip'
+import { useHeldValue } from '~/hooks/use-held-value'
 import { plural } from '~/lib/format'
 import { useSession } from '~/providers/session-provider'
 import type { PeopleActionResult } from '~/routes/_auth.settings.people'
@@ -184,14 +187,21 @@ function MemberRow({
 	})
 
 	const pending = fetcher.formData
-	const role =
+	const failed = fetcher.state === 'idle' && Boolean(fetcher.data?.error)
+	const role = useHeldValue(
 		pending?.get('intent') === 'change-role'
 			? (pending.get('role') as MemberRole)
-			: member.role
-	const groupIds =
+			: undefined,
+		member.role,
+		failed,
+	)
+	const groupIds = useHeldValue(
 		pending?.get('intent') === 'set-groups'
 			? (pending.getAll('group_ids') as string[])
-			: member.group_ids
+			: undefined,
+		member.group_ids,
+		failed,
+	)
 	const isAdmin = role !== 'MEMBER'
 	const isSelf = member.user_id === user.id
 
@@ -408,8 +418,12 @@ function InvitationRow({
 }
 
 export function PeopleSettingsModule() {
-	const { members, invitations, groups } = useLoaderData() as PeopleOverview
-	const { can } = useSession()
+	const overview = useLoaderData() as PeopleOverview
+	const { invitations, groups, total_members, role_counts } = overview
+	const { can, organization } = useSession()
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+		useGetPeoplePages(overview, organization.id)
+	const members = data.pages.flatMap((page) => page.members)
 	const editableGroups = groups.filter((group) => !group.is_system)
 
 	return (
@@ -423,7 +437,7 @@ export function PeopleSettingsModule() {
 						<dt className="flex items-center gap-2 text-sm font-medium">
 							{item.name}
 							<span className="text-muted text-xs font-normal tabular-nums">
-								{members.filter((member) => member.role === item.role).length}
+								{role_counts[item.role]}
 							</span>
 						</dt>
 						<dd className="text-secondary text-[13px] leading-[1.45]">
@@ -438,19 +452,12 @@ export function PeopleSettingsModule() {
 			</p>
 			{can('members.invite') ? <InviteForm groups={editableGroups} /> : null}
 			<p className="text-secondary text-[13px] tabular-nums">
-				{plural(members.length, 'person', 'people')}
+				{plural(total_members, 'person', 'people')}
 				{invitations.length
 					? ` · ${plural(invitations.length, 'pending invitation')}`
 					: ''}
 			</p>
 			<ul className="overflow-hidden rounded-[26px] border">
-				{members.map((member) => (
-					<MemberRow
-						key={member.membership_id}
-						member={member}
-						groups={editableGroups}
-					/>
-				))}
 				{invitations.map((invitation) => (
 					<InvitationRow
 						key={invitation.id}
@@ -458,6 +465,20 @@ export function PeopleSettingsModule() {
 						groups={editableGroups}
 					/>
 				))}
+				{members.map((member) => (
+					<MemberRow
+						key={member.membership_id}
+						member={member}
+						groups={editableGroups}
+					/>
+				))}
+				<LoadMore
+					as="li"
+					hasMore={hasNextPage}
+					loading={isFetchingNextPage}
+					onLoadMore={() => void fetchNextPage()}
+					label="Loading more people…"
+				/>
 			</ul>
 		</div>
 	)

@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
-import { useFetcher, useLoaderData, useSearchParams } from 'react-router'
+import { Fragment } from 'react'
+import { useLoaderData, useSearchParams } from 'react-router'
+import { useGetAuditPages } from '~/api/audit-events'
 import { Button } from '~/components/arc/button/button'
 import { EmptyState } from '~/components/arc/empty-state/empty-state'
 import SegmentedControl from '~/components/arc/segmented-control/segmented-control'
+import { LoadMore } from '~/components/load-more'
 import { useAppBase } from '~/providers/app-base-provider'
+import { useSession } from '~/providers/session-provider'
 
 type Filter = 'all' | Lowercase<AuditCategory>
 
@@ -42,36 +45,55 @@ function downloadCsv(entries: AuditEntry[]) {
 	URL.revokeObjectURL(link.href)
 }
 
-function groupByDay(entries: AuditEntry[]) {
-	const days: Array<{ label: string; entries: AuditEntry[] }> = []
-	for (const entry of entries) {
-		const last = days.at(-1)
-		if (last?.label === entry.day_label) last.entries.push(entry)
-		else days.push({ label: entry.day_label, entries: [entry] })
-	}
-	return days
+function AuditRows({
+	entries,
+	previous,
+}: {
+	entries: AuditEntry[]
+	previous: AuditEntry | undefined
+}) {
+	return entries.map((entry, index) => {
+		const before = index ? entries[index - 1] : previous
+		return (
+			<Fragment key={entry.id}>
+				{before?.day_label !== entry.day_label ? (
+					<li className="text-secondary border-border-subtle border-b pt-4 pb-2 text-[13px] font-medium first:pt-0">
+						<h2>{entry.day_label}</h2>
+					</li>
+				) : null}
+				<li className="border-border-subtle grid grid-cols-[64px_1fr] gap-4 border-b py-3.5">
+					<time
+						dateTime={entry.occurred_at || undefined}
+						className="text-muted text-[13px] tabular-nums"
+					>
+						{entry.time_label}
+					</time>
+					<span className="text-sm leading-normal">
+						<span className="font-medium">{entry.actor}</span>{' '}
+						<span className="text-secondary">{entry.action}</span>
+						{entry.target ? ` ${entry.target}` : null}
+					</span>
+				</li>
+			</Fragment>
+		)
+	})
 }
 
 export function AuditLogSettingsModule() {
 	const firstPage = useLoaderData() as AuditLogPage
 	const [searchParams, setSearchParams] = useSearchParams()
 	const { path, demo } = useAppBase()
-	const older = useFetcher<AuditLogPage>()
-	const [extra, setExtra] = useState<AuditLogPage[]>([])
 
+	const { organization } = useSession()
 	const category = searchParams.get('category')
 	const filter: Filter = isFilter(category) ? category : 'all'
-
-	useEffect(() => setExtra([]), [firstPage])
-	useEffect(() => {
-		if (older.state === 'idle' && older.data) {
-			const page = older.data
-			setExtra((pages) => (pages.includes(page) ? pages : [...pages, page]))
-		}
-	}, [older.state, older.data])
-
-	const entries = [firstPage, ...extra].flatMap((page) => page.entries)
-	const nextCursor = (extra.at(-1) ?? firstPage).next_cursor
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+		useGetAuditPages(
+			firstPage,
+			organization.id,
+			filter === 'all' ? null : filter,
+		)
+	const entries = data.pages.flatMap((page) => page.entries)
 	const query = (params: Record<string, string>) =>
 		`?${new URLSearchParams(filter === 'all' ? params : { category: filter, ...params })}`
 
@@ -89,72 +111,34 @@ export function AuditLogSettingsModule() {
 					options={FILTERS}
 				/>
 				<span className="flex-1" />
-				{demo ? (
-					<Button
-						variant="secondary"
-						size="sm"
-						disabled={!entries.length}
-						onClick={() => downloadCsv(entries)}
-					>
-						Export CSV
-					</Button>
-				) : entries.length ? (
+				{firstPage.entries.length ? (
 					<Button
 						variant="secondary"
 						size="sm"
 						onClick={() =>
-							window.location.assign(
-								`${path('/settings/audit-log.csv')}${query({})}`,
-							)
+							demo
+								? downloadCsv(entries)
+								: window.location.assign(
+										`${path('/settings/audit-log.csv')}${query({})}`,
+									)
 						}
 					>
 						Export CSV
 					</Button>
 				) : null}
 			</div>
-			{entries.length ? (
+			{firstPage.entries.length ? (
 				<>
-					{groupByDay(entries).map((day) => (
-						<section key={day.label} className="flex flex-col">
-							<h2 className="text-secondary border-border-subtle border-b pb-2 text-[13px] font-medium">
-								{day.label}
-							</h2>
-							<ol className="flex flex-col">
-								{day.entries.map((entry) => (
-									<li
-										key={entry.id}
-										className="border-border-subtle grid grid-cols-[64px_1fr] gap-4 border-b py-3.5"
-									>
-										<time
-											dateTime={entry.occurred_at || undefined}
-											className="text-muted text-[13px] tabular-nums"
-										>
-											{entry.time_label}
-										</time>
-										<span className="text-sm leading-normal">
-											<span className="font-medium">{entry.actor}</span>{' '}
-											<span className="text-secondary">{entry.action}</span>
-											{entry.target ? ` ${entry.target}` : null}
-										</span>
-									</li>
-								))}
-							</ol>
-						</section>
-					))}
-					{nextCursor ? (
-						<Button
-							variant="secondary"
-							className="self-center"
-							loading={older.state !== 'idle'}
-							onClick={() =>
-								older.load(
-									`${path('/settings/audit-log')}${query({ before: nextCursor })}`,
-								)
-							}
-						>
-							Load older activity
-						</Button>
-					) : null}
+					<ol className="flex flex-col">
+						<AuditRows entries={entries} previous={undefined} />
+						<LoadMore
+							as="li"
+							hasMore={hasNextPage}
+							loading={isFetchingNextPage}
+							onLoadMore={() => void fetchNextPage()}
+							label="Loading older activity…"
+						/>
+					</ol>
 					<p className="text-muted text-xs">Times are in GMT.</p>
 				</>
 			) : (

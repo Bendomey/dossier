@@ -51,13 +51,24 @@ async function editableGroupIds(
 	return groups.map((group) => group.id)
 }
 
+export const PAGE_SIZE = 50
+
+/**
+ * People settings, 50 members at a time (oldest first). Totals, role counts,
+ * invitations and groups come with the first page only; later pages (`before`
+ * = the previous page's last membership) carry just members.
+ */
 export async function getPeopleOverview(
 	organizationId: string,
+	options: { before?: string | null } = {},
 ): Promise<PeopleOverview> {
-	const [members, invitations, groups] = await Promise.all([
+	const firstPage = !options.before
+	const [members, roleRows, invitations, groups] = await Promise.all([
 		db().organizationMember.findMany({
 			where: { organizationId, status: 'ACTIVE' },
-			orderBy: { joinedAt: 'asc' },
+			orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+			take: PAGE_SIZE + 1,
+			...(options.before ? { cursor: { id: options.before }, skip: 1 } : {}),
 			include: {
 				user: true,
 				roles: { include: { role: true } },
@@ -67,20 +78,45 @@ export async function getPeopleOverview(
 				},
 			},
 		}),
-		db().organizationInvitation.findMany({
-			where: { organizationId, status: 'PENDING' },
-			orderBy: { createdAt: 'asc' },
-			include: { role: true, groups: { select: { groupId: true } } },
-		}),
-		db().group.findMany({
-			where: { organizationId },
-			orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
-			select: { id: true, name: true, isSystem: true },
-		}),
+		firstPage
+			? db().memberRole.findMany({
+					where: { organizationId, membership: { status: 'ACTIVE' } },
+					select: { membershipId: true, role: { select: { name: true } } },
+				})
+			: [],
+		firstPage
+			? db().organizationInvitation.findMany({
+					where: { organizationId, status: 'PENDING' },
+					orderBy: { createdAt: 'asc' },
+					include: { role: true, groups: { select: { groupId: true } } },
+				})
+			: [],
+		firstPage
+			? db().group.findMany({
+					where: { organizationId },
+					orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+					select: { id: true, name: true, isSystem: true },
+				})
+			: [],
 	])
 
+	const rolesByMember = new Map<string, string[]>()
+	for (const row of roleRows) {
+		rolesByMember.set(row.membershipId, [
+			...(rolesByMember.get(row.membershipId) ?? []),
+			row.role.name,
+		])
+	}
+	const roleCounts: Record<MemberRole, number> = {
+		OWNER: 0,
+		ADMIN: 0,
+		MEMBER: 0,
+	}
+	for (const names of rolesByMember.values()) roleCounts[highestRole(names)]++
+
+	const page = members.slice(0, PAGE_SIZE)
 	return {
-		members: members.map((member) => ({
+		members: page.map((member) => ({
 			membership_id: member.id,
 			user_id: member.userId,
 			name: member.user.displayName ?? member.user.email ?? 'Unnamed',
@@ -89,6 +125,9 @@ export async function getPeopleOverview(
 			role: highestRole(member.roles.map(({ role }) => role.name)),
 			group_ids: member.groups.map(({ groupId }) => groupId),
 		})),
+		next_cursor: members.length > PAGE_SIZE ? page.at(-1)!.id : null,
+		total_members: rolesByMember.size,
+		role_counts: roleCounts,
 		invitations: invitations.map((invitation) => ({
 			id: invitation.id,
 			email: invitation.email,
