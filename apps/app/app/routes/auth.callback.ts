@@ -5,7 +5,7 @@ import {
 	getSessionClaims,
 	signedInWithEmailLink,
 } from '~/api/auth/server'
-import { acceptPendingInvitations } from '~/api/members/server'
+import { landingAfterSignIn } from '~/api/members/server'
 import { safeRedirect } from '~/lib/misc'
 import { createSupabaseServerClient } from '~/lib/supabase.server'
 
@@ -20,10 +20,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const failure = await completeAuthRedirect(supabase, url.searchParams)
 	if (failure) throw redirect('/login?error=link', { headers })
 
+	const target = safeRedirect(url.searchParams.get('next'))
 	const claims = await getSessionClaims(supabase)
-	const joined = claims?.email
-		? await acceptPendingInvitations(claims.sub, claims.email)
-		: []
+	const { path, joined } = claims
+		? await landingAfterSignIn(claims, target)
+		: { path: target, joined: [] }
 
 	// Invited people arrive through the emailed link with no password yet.
 	if (
@@ -34,5 +35,5 @@ export async function loader({ request }: Route.LoaderArgs) {
 	) {
 		throw redirect('/reset-password?invited=1', { headers })
 	}
-	throw redirect(safeRedirect(url.searchParams.get('next')), { headers })
+	throw redirect(path, { headers })
 }

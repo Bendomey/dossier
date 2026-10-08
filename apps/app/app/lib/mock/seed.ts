@@ -408,4 +408,13 @@ export const DEMO_SESSION: Session = {
 		logo_url: null,
 		member_count: MEMBERS.filter((member) => !member.invited).length,
 	},
+	workspaces: [
+		{
+			id: ORGANIZATION.id,
+			name: ORGANIZATION.name,
+			logo_url: null,
+			role: demoOwner.role,
+		},
+	],
+	invitations: [],
 }

@@ -4,6 +4,12 @@ import { Alert } from '~/components/arc/alert/alert'
 import { Avatar } from '~/components/arc/avatar/avatar'
 import { Badge } from '~/components/arc/badge/badge'
 import { Button } from '~/components/arc/button/button'
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogTrigger,
+} from '~/components/arc/dialog/dialog'
 import { NativeSelect, TextInput } from '~/components/form-controls'
 import { ToggleChip } from '~/components/toggle-chip'
 import { plural } from '~/lib/format'
@@ -126,6 +132,41 @@ function GroupChips({
 	)
 }
 
+function RemoveMember({ member }: { member: OrganizationPerson }) {
+	const removal = useFetcher<PeopleActionResult>({
+		key: `remove:${member.membership_id}`,
+	})
+
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="ghost" size="sm" aria-label={`Remove ${member.name}`}>
+					Remove
+				</Button>
+			</DialogTrigger>
+			<DialogContent
+				title={`Remove ${member.name}?`}
+				description={`${member.name} loses access to this workspace, its documents and chats straight away. What they created stays. You can invite them again later.`}
+			>
+				<removal.Form method="post" className="flex justify-end gap-2">
+					<input type="hidden" name="intent" value="remove" />
+					<input
+						type="hidden"
+						name="membership_id"
+						value={member.membership_id}
+					/>
+					<DialogClose asChild>
+						<Button variant="secondary">Cancel</Button>
+					</DialogClose>
+					<Button type="submit" variant="danger">
+						Remove from workspace
+					</Button>
+				</removal.Form>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
 function MemberRow({
 	member,
 	groups,
@@ -138,6 +179,9 @@ function MemberRow({
 		key: `member:${member.membership_id}`,
 	})
 	const [editing, setEditing] = useState(false)
+	const removal = useFetcher<PeopleActionResult>({
+		key: `remove:${member.membership_id}`,
+	})
 
 	const pending = fetcher.formData
 	const role =
@@ -150,6 +194,10 @@ function MemberRow({
 			: member.group_ids
 	const isAdmin = role !== 'MEMBER'
 	const isSelf = member.user_id === user.id
+
+	if (removal.formData || (removal.state === 'idle' && removal.data?.ok)) {
+		return null
+	}
 
 	function submit(values: Record<string, string | string[]>) {
 		const body = new FormData()
@@ -230,13 +278,20 @@ function MemberRow({
 						<option value="MEMBER">Member</option>
 					</NativeSelect>
 				)}
+				{can('members.remove') ? (
+					<span className="flex w-[76px] justify-end">
+						{role !== 'OWNER' && !isSelf ? (
+							<RemoveMember member={member} />
+						) : null}
+					</span>
+				) : null}
 			</div>
-			{fetcher.data?.error ? (
+			{(fetcher.data?.error ?? removal.data?.error) ? (
 				<p
 					role="alert"
 					className="text-danger px-[18px] pb-3 pl-[66px] text-[13px]"
 				>
-					{fetcher.data.error}
+					{fetcher.data?.error ?? removal.data?.error}
 				</p>
 			) : null}
 			{editing && !isAdmin ? (

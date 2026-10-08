@@ -38,7 +38,25 @@ interface OrganizationSettings {
 
 type UpdateOrganizationSettingsInput = Partial<Omit<OrganizationSettings, 'id'>>
 
+/** Another workspace the person belongs to, for the switcher. */
+interface WorkspaceSummary {
+	id: string
+	name: string
+	logo_url: string | null
+	role: MemberRole
+}
+
+/** An invitation waiting for the signed-in person to accept or decline. */
+interface InvitationSummary {
+	id: string
+	organization_name: string
+	role: Exclude<MemberRole, 'OWNER'>
+	invited_by: string | null
+}
+
 interface Session {
 	user: User
 	organization: SessionOrganization
+	workspaces: WorkspaceSummary[]
+	invitations: InvitationSummary[]
 }

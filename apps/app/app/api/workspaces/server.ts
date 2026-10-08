@@ -35,21 +35,80 @@ export async function ensureProfile(identity: SessionIdentity) {
 	})
 }
 
+const roleFromNames = (names: string[]): MemberRole => {
+	const roles = names.map((name) => ROLE_BY_SYSTEM_NAME[name]).filter(Boolean)
+	return roles.includes('OWNER')
+		? 'OWNER'
+		: roles.includes('ADMIN')
+			? 'ADMIN'
+			: 'MEMBER'
+}
+
+/** Pending, unexpired invitations addressed to this email, oldest first. */
+export async function listInvitationsFor(email: string | undefined) {
+	if (!email) return []
+	const invitations = await db().organizationInvitation.findMany({
+		where: {
+			email: email.toLowerCase(),
+			status: 'PENDING',
+			expiresAt: { gt: new Date() },
+			organization: { status: 'ACTIVE' },
+		},
+		orderBy: { createdAt: 'asc' },
+		include: { organization: true, role: true, invitedBy: true },
+	})
+	return invitations.map(
+		(invitation): InvitationSummary => ({
+			id: invitation.id,
+			organization_name: invitation.organization.name,
+			role: invitation.role?.name === 'Admin' ? 'ADMIN' : 'MEMBER',
+			invited_by: invitation.invitedBy?.displayName ?? null,
+		}),
+	)
+}
+
+/** Every workspace the person is an active member of, oldest membership first. */
+export async function listWorkspaces(userId: string) {
+	const memberships = await db().organizationMember.findMany({
+		where: { userId, status: 'ACTIVE', organization: { status: 'ACTIVE' } },
+		orderBy: { joinedAt: 'asc' },
+		include: { organization: true, roles: { include: { role: true } } },
+	})
+	return memberships.map(
+		(membership): WorkspaceSummary => ({
+			id: membership.organizationId,
+			name: membership.organization.name,
+			logo_url: membership.organization.logoUrl,
+			role: roleFromNames(membership.roles.map(({ role }) => role.name)),
+		}),
+	)
+}
+
 /**
- * The signed-in person in their organization, or null when they do not
- * belong to one yet and need onboarding. The first active membership wins
- * until an organization switcher exists.
+ * The signed-in person in the workspace they chose, or null when they belong
+ * to none yet and need onboarding. A preference for a workspace they no longer
+ * belong to falls back to their oldest membership.
  */
 export async function getSession(
 	identity: SessionIdentity,
+	preferredOrganizationId?: string | null,
 ): Promise<Session | null> {
-	const membership = await db().organizationMember.findFirst({
+	const [workspaces, invitations] = await Promise.all([
+		listWorkspaces(identity.sub),
+		listInvitationsFor(identity.email),
+	])
+	const current =
+		workspaces.find((workspace) => workspace.id === preferredOrganizationId) ??
+		workspaces[0]
+	if (!current) return null
+
+	const membership = await db().organizationMember.findUniqueOrThrow({
 		where: {
-			userId: identity.sub,
-			status: 'ACTIVE',
-			organization: { status: 'ACTIVE' },
+			organizationId_userId: {
+				organizationId: current.id,
+				userId: identity.sub,
+			},
 		},
-		orderBy: { joinedAt: 'asc' },
 		include: {
 			user: true,
 			organization: {
@@ -64,16 +123,7 @@ export async function getSession(
 			},
 		},
 	})
-	if (!membership) return null
 
-	const roles = membership.roles
-		.map(({ role }) => ROLE_BY_SYSTEM_NAME[role.name])
-		.filter(Boolean)
-	const role: MemberRole = roles.includes('OWNER')
-		? 'OWNER'
-		: roles.includes('ADMIN')
-			? 'ADMIN'
-			: 'MEMBER'
 	const permissions = [
 		...new Set(
 			membership.roles.flatMap(({ role }) =>
@@ -90,7 +140,7 @@ export async function getSession(
 			id: identity.sub,
 			name: membership.user.displayName ?? displayName(identity),
 			email: identity.email ?? '',
-			role,
+			role: current.role,
 			organization_id: organization.id,
 			avatar_url: membership.user.avatarUrl,
 			permissions,
@@ -102,6 +152,8 @@ export async function getSession(
 			logo_url: organization.logoUrl,
 			member_count: organization._count.members,
 		},
+		workspaces,
+		invitations,
 	}
 }
 

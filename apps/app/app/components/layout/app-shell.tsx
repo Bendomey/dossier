@@ -4,49 +4,14 @@ import { Form, Link, useNavigate } from 'react-router'
 
 import { PrimaryNav, RecentChats, SettingsNavItem } from './sidebar-nav'
 import { ThemeToggle } from './theme-toggle'
+import { WorkspaceSwitcher } from './workspace-switcher'
 import { Avatar } from '~/components/arc/avatar/avatar'
 import { Button } from '~/components/arc/button/button'
 import { Drawer, DrawerContent } from '~/components/arc/drawer/drawer'
 import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { usePageTitle } from '~/hooks/use-page-title'
-import { plural } from '~/lib/format'
 import { useAppBase } from '~/providers/app-base-provider'
 import { useSession } from '~/providers/session-provider'
-
-const ROLE_LABELS: Record<MemberRole, string> = {
-	OWNER: 'Owner',
-	ADMIN: 'Admin',
-	MEMBER: 'Member',
-}
-
-function OrganizationBadge() {
-	const { organization, user } = useSession()
-
-	return (
-		<div className="flex items-center gap-2.5 rounded-[14px] p-2">
-			{organization.logo_url ? (
-				<img
-					src={organization.logo_url}
-					alt=""
-					className="size-7 shrink-0 rounded-lg object-cover"
-				/>
-			) : (
-				<span className="bg-foreground text-background grid size-7 shrink-0 place-items-center rounded-lg text-[13px] font-medium">
-					{organization.name.charAt(0).toUpperCase()}
-				</span>
-			)}
-			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate text-sm font-medium">
-					{organization.name}
-				</span>
-				<span className="text-muted truncate text-xs">
-					{ROLE_LABELS[user.role]} ·{' '}
-					{plural(organization.member_count, 'member')}
-				</span>
-			</span>
-		</div>
-	)
-}
 
 function SignOutButton({ className }: { className?: string }) {
 	return (
@@ -71,7 +36,7 @@ function Sidebar() {
 
 	return (
 		<aside className="desk:flex border-border hidden w-[264px] shrink-0 flex-col gap-1 border-r p-3">
-			<OrganizationBadge />
+			<WorkspaceSwitcher />
 			<Button
 				variant="secondary"
 				className="my-2 w-full"
@@ -151,7 +116,7 @@ function MobileNav({
 		<Drawer open={open} onOpenChange={onOpenChange}>
 			<DrawerContent side="left" title="Dossier">
 				<div className="flex h-full flex-col gap-1">
-					<OrganizationBadge />
+					<WorkspaceSwitcher />
 					<PrimaryNav size="lg" onNavigate={close} />
 					<RecentChats onNavigate={close} />
 					<SettingsNavItem size="lg" onNavigate={close} />

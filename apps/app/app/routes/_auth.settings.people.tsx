@@ -6,6 +6,7 @@ import {
 	MemberError,
 	changeMemberRole,
 	createInvitation,
+	removeMember,
 	getPeopleOverview,
 	revokeInvitation,
 	setMemberGroups,
@@ -34,6 +35,7 @@ const actionSchema = z.discriminatedUnion('intent', [
 		group_ids: z.array(uuid),
 	}),
 	z.object({ intent: z.literal('revoke'), invitation_id: uuid }),
+	z.object({ intent: z.literal('remove'), membership_id: uuid }),
 ])
 
 export type PeopleActionResult = {
@@ -45,7 +47,7 @@ export type PeopleActionResult = {
 const INVITE_MESSAGES = {
 	sent: (email: string) => `Invitation sent to ${email}.`,
 	'existing-account': (email: string) =>
-		`${email} already has a Dossier account. They’ll join when they next sign in.`,
+		`Invitation saved. ${email} already has a Dossier account, so they’ll see it in their workspace switcher next time they open Dossier.`,
 	'not-configured': (email: string) =>
 		`Invitation saved for ${email}, but no email was sent: add SUPABASE_SECRET_KEY to send invitations.`,
 	failed: (email: string) =>
@@ -115,6 +117,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 					input.membership_id,
 					input.group_ids,
 				)
+				return { ok: true }
+			case 'remove':
+				requirePermission(session, 'members.remove')
+				await removeMember(organizationId, actorId, input.membership_id)
 				return { ok: true }
 			case 'revoke':
 				requirePermission(session, 'members.invite')

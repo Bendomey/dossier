@@ -1,7 +1,7 @@
 import { redirect } from 'react-router'
 import type { Route } from './+types/login'
 import { getSessionClaims, signInWithPassword } from '~/api/auth/server'
-import { acceptPendingInvitations } from '~/api/members/server'
+import { landingAfterSignIn } from '~/api/members/server'
 import { redirectIfSignedIn, withHeaders } from '~/lib/actions/auth.server'
 import { safeRedirect } from '~/lib/misc'
 import { pageTitle } from '~/lib/seo'
@@ -32,10 +32,13 @@ export async function action({ request }: Route.ActionArgs) {
 	})
 	if (failure) return withHeaders(failure, headers, { status: 400 })
 
+	const target = safeRedirect(form.get('return_to'))
 	const claims = await getSessionClaims(supabase)
-	if (claims?.email) await acceptPendingInvitations(claims.sub, claims.email)
+	const { path } = claims
+		? await landingAfterSignIn(claims, target)
+		: { path: target }
 
-	throw redirect(safeRedirect(form.get('return_to')), { headers })
+	throw redirect(path, { headers })
 }
 
 export const meta: Route.MetaFunction = () => pageTitle('Sign in')

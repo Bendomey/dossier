@@ -291,78 +291,198 @@ export async function setMemberGroups(
 	})
 }
 
+type PendingInvitationRecord = Prisma.OrganizationInvitationGetPayload<{
+	include: { groups: true }
+}>
+
+/** Membership, role, invited groups and Everyone; then marks the invitation accepted. */
+async function joinFromInvitation(
+	tx: Prisma.TransactionClient,
+	invitation: PendingInvitationRecord,
+	userId: string,
+) {
+	const { organizationId } = invitation
+	const already = await tx.organizationMember.findUnique({
+		where: { organizationId_userId: { organizationId, userId } },
+	})
+	if (!already) {
+		const everyone = await tx.group.findFirst({
+			where: { organizationId, isSystem: true },
+		})
+		const membership = await tx.organizationMember.create({
+			data: {
+				organizationId,
+				userId,
+				roles: {
+					create: {
+						roleId: invitation.roleId ?? (await systemRoleId(tx, 'MEMBER')),
+					},
+				},
+			},
+		})
+		const groupIds = [
+			...invitation.groups.map(({ groupId }) => groupId),
+			...(everyone ? [everyone.id] : []),
+		]
+		await tx.groupMember.createMany({
+			data: groupIds.map((groupId) => ({
+				organizationId,
+				groupId,
+				membershipId: membership.id,
+			})),
+			skipDuplicates: true,
+		})
+		await tx.auditLog.create({
+			data: {
+				organizationId,
+				actorUserId: userId,
+				action: 'member.joined',
+				resourceType: 'membership',
+				resourceId: membership.id,
+				metadata: { email: invitation.email, invitation_id: invitation.id },
+			},
+		})
+	}
+	await tx.organizationInvitation.update({
+		where: { id: invitation.id },
+		data: { status: 'ACCEPTED', acceptedAt: new Date() },
+	})
+}
+
+const pendingFor = (email: string) => ({
+	email: email.toLowerCase(),
+	status: 'PENDING' as const,
+	expiresAt: { gt: new Date() },
+})
+
 /**
- * Joins the invitations waiting for this email: membership, role, groups and
- * the Everyone group. Returns the organizations joined; empty when there were none.
+ * For someone with no workspace yet (typically a new account created by an
+ * invitation): joins everything waiting for their email so they land in a
+ * workspace instead of onboarding. People who already belong somewhere choose
+ * for themselves on /workspaces. Returns the organizations joined.
  */
-export async function acceptPendingInvitations(userId: string, email: string) {
+export async function joinInvitationsIfNew(userId: string, email: string) {
+	const hasWorkspace = await db().organizationMember.count({
+		where: { userId, status: 'ACTIVE' },
+	})
+	if (hasWorkspace) return []
+
 	const invitations = await db().organizationInvitation.findMany({
-		where: {
-			email: email.toLowerCase(),
-			status: 'PENDING',
-			expiresAt: { gt: new Date() },
-		},
+		where: pendingFor(email),
 		include: { groups: true },
 		orderBy: { createdAt: 'asc' },
 	})
+	if (!invitations.length) return []
 
-	if (invitations.length) await ensureProfile({ sub: userId, email })
-
-	const joined: string[] = []
+	await ensureProfile({ sub: userId, email })
 	for (const invitation of invitations) {
-		await db().$transaction(async (tx) => {
-			const already = await tx.organizationMember.findUnique({
-				where: {
-					organizationId_userId: {
-						organizationId: invitation.organizationId,
-						userId,
-					},
-				},
-			})
-			if (!already) {
-				const everyone = await tx.group.findFirst({
-					where: { organizationId: invitation.organizationId, isSystem: true },
-				})
-				const membership = await tx.organizationMember.create({
-					data: {
-						organizationId: invitation.organizationId,
-						userId,
-						roles: {
-							create: {
-								roleId: invitation.roleId ?? (await systemRoleId(tx, 'MEMBER')),
-							},
-						},
-					},
-				})
-				const groupIds = [
-					...invitation.groups.map(({ groupId }) => groupId),
-					...(everyone ? [everyone.id] : []),
-				]
-				await tx.groupMember.createMany({
-					data: groupIds.map((groupId) => ({
-						organizationId: invitation.organizationId,
-						groupId,
-						membershipId: membership.id,
-					})),
-					skipDuplicates: true,
-				})
-				await tx.auditLog.create({
-					data: {
-						organizationId: invitation.organizationId,
-						actorUserId: userId,
-						action: 'member.joined',
-						resourceType: 'membership',
-						resourceId: membership.id,
-						metadata: { email: invitation.email, invitation_id: invitation.id },
-					},
-				})
-			}
-			await tx.organizationInvitation.update({
-				where: { id: invitation.id },
-				data: { status: 'ACCEPTED', acceptedAt: new Date() },
-			})
-		})
-		joined.push(invitation.organizationId)
+		await db().$transaction((tx) => joinFromInvitation(tx, invitation, userId))
 	}
-	return joined
+	return invitations.map((invitation) => invitation.organizationId)
+}
+
+async function findOwnInvitation(invitationId: string, email: string) {
+	const invitation = await db().organizationInvitation.findFirst({
+		where: { id: invitationId, ...pendingFor(email) },
+		include: { groups: true },
+	})
+	if (!invitation) {
+		throw new MemberError(
+			'That invitation was revoked, has expired or was already used.',
+		)
+	}
+	return invitation
+}
+
+/** Accepts one invitation addressed to the signed-in person. Returns the organization joined. */
+export async function acceptInvitation(
+	userId: string,
+	email: string,
+	invitationId: string,
+) {
+	const invitation = await findOwnInvitation(invitationId, email)
+	await ensureProfile({ sub: userId, email })
+	await db().$transaction((tx) => joinFromInvitation(tx, invitation, userId))
+	return invitation.organizationId
+}
+
+export async function declineInvitation(
+	userId: string,
+	email: string,
+	invitationId: string,
+) {
+	const invitation = await findOwnInvitation(invitationId, email)
+	await ensureProfile({ sub: userId, email })
+	await db().$transaction([
+		db().organizationInvitation.update({
+			where: { id: invitation.id },
+			data: { status: 'DECLINED' },
+		}),
+		db().auditLog.create({
+			data: {
+				organizationId: invitation.organizationId,
+				actorUserId: userId,
+				action: 'member.invitation_declined',
+				resourceType: 'invitation',
+				resourceId: invitation.id,
+				metadata: { email: invitation.email },
+			},
+		}),
+	])
+}
+
+/**
+ * Removes someone from the workspace: their membership, roles, groups and
+ * chat access go; what they created stays. The owner can't be removed, and
+ * nobody removes themselves here.
+ */
+export async function removeMember(
+	organizationId: string,
+	actorUserId: string,
+	membershipId: string,
+) {
+	await db().$transaction(async (tx) => {
+		const membership = await findMembership(tx, organizationId, membershipId)
+		if (membership.userId === actorUserId) {
+			throw new MemberError('You can’t remove yourself.')
+		}
+		if (
+			highestRole(membership.roles.map(({ role }) => role.name)) === 'OWNER'
+		) {
+			throw new MemberError('The owner can’t be removed.')
+		}
+		await tx.organizationMember.delete({ where: { id: membership.id } })
+		await tx.auditLog.create({
+			data: {
+				organizationId,
+				actorUserId,
+				action: 'member.removed',
+				resourceType: 'membership',
+				resourceId: membership.id,
+				metadata: {
+					person: membership.user.displayName,
+					email: membership.user.email,
+				},
+			},
+		})
+	})
+}
+
+/**
+ * Where someone goes right after signing in: newcomers join their invitations
+ * and go on; people who already have a workspace and new invitations decide
+ * on /workspaces first.
+ */
+export async function landingAfterSignIn(
+	identity: { sub: string; email?: string },
+	target: string,
+) {
+	if (!identity.email) return { path: target, joined: [] as string[] }
+	const joined = await joinInvitationsIfNew(identity.sub, identity.email)
+	if (joined.length) return { path: target, joined }
+
+	const waiting = await db().organizationInvitation.count({
+		where: pendingFor(identity.email),
+	})
+	return { path: waiting ? '/workspaces' : target, joined }
 }
