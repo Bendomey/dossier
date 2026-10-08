@@ -85,30 +85,19 @@ export async function listWorkspaces(userId: string) {
 }
 
 /**
- * The signed-in person in the workspace they chose, or null when they belong
- * to none yet and need onboarding. A preference for a workspace they no longer
- * belong to falls back to their oldest membership.
+ * One active membership with everything the session needs, in a single query
+ * so a removal can't land between finding the workspace and loading it.
+ * Without an organization, the oldest membership.
  */
-export async function getSession(
-	identity: SessionIdentity,
-	preferredOrganizationId?: string | null,
-): Promise<Session | null> {
-	const [workspaces, invitations] = await Promise.all([
-		listWorkspaces(identity.sub),
-		listInvitationsFor(identity.email),
-	])
-	const current =
-		workspaces.find((workspace) => workspace.id === preferredOrganizationId) ??
-		workspaces[0]
-	if (!current) return null
-
-	const membership = await db().organizationMember.findUniqueOrThrow({
+function findSessionMembership(userId: string, organizationId?: string) {
+	return db().organizationMember.findFirst({
 		where: {
-			organizationId_userId: {
-				organizationId: current.id,
-				userId: identity.sub,
-			},
+			userId,
+			status: 'ACTIVE',
+			organization: { status: 'ACTIVE' },
+			...(organizationId ? { organizationId } : {}),
 		},
+		orderBy: { joinedAt: 'asc' },
 		include: {
 			user: true,
 			organization: {
@@ -123,6 +112,27 @@ export async function getSession(
 			},
 		},
 	})
+}
+
+/**
+ * The signed-in person in the workspace they chose, or null when they belong
+ * to none yet and need onboarding. A preference for a workspace they no longer
+ * belong to falls back to their oldest membership.
+ */
+export async function getSession(
+	identity: SessionIdentity,
+	preferredOrganizationId?: string | null,
+): Promise<Session | null> {
+	const membership =
+		(preferredOrganizationId
+			? await findSessionMembership(identity.sub, preferredOrganizationId)
+			: null) ?? (await findSessionMembership(identity.sub))
+	if (!membership) return null
+
+	const [workspaces, invitations] = await Promise.all([
+		listWorkspaces(identity.sub),
+		listInvitationsFor(identity.email),
+	])
 
 	const permissions = [
 		...new Set(
@@ -140,7 +150,7 @@ export async function getSession(
 			id: identity.sub,
 			name: membership.user.displayName ?? displayName(identity),
 			email: identity.email ?? '',
-			role: current.role,
+			role: roleFromNames(membership.roles.map(({ role }) => role.name)),
 			organization_id: organization.id,
 			avatar_url: membership.user.avatarUrl,
 			permissions,
