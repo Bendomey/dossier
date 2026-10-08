@@ -1,6 +1,11 @@
 import { redirect } from 'react-router'
 import type { Route } from './+types/auth.callback'
-import { completeAuthRedirect } from '~/api/auth/server'
+import {
+	completeAuthRedirect,
+	getSessionClaims,
+	signedInWithEmailLink,
+} from '~/api/auth/server'
+import { acceptPendingInvitations } from '~/api/members/server'
 import { safeRedirect } from '~/lib/misc'
 import { createSupabaseServerClient } from '~/lib/supabase.server'
 
@@ -15,5 +20,19 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const failure = await completeAuthRedirect(supabase, url.searchParams)
 	if (failure) throw redirect('/login?error=link', { headers })
 
+	const claims = await getSessionClaims(supabase)
+	const joined = claims?.email
+		? await acceptPendingInvitations(claims.sub, claims.email)
+		: []
+
+	// Invited people arrive through the emailed link with no password yet.
+	if (
+		joined.length &&
+		claims &&
+		signedInWithEmailLink(claims) &&
+		url.searchParams.get('type') === 'invite'
+	) {
+		throw redirect('/reset-password?invited=1', { headers })
+	}
 	throw redirect(safeRedirect(url.searchParams.get('next')), { headers })
 }

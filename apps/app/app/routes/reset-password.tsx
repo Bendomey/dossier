@@ -16,7 +16,8 @@ async function requireRecoverySession(request: Request) {
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const { headers, claims } = await requireRecoverySession(request)
-	return withHeaders({ email: claims.email ?? '' }, headers)
+	const invited = new URL(request.url).searchParams.get('invited') === '1'
+	return withHeaders({ email: claims.email ?? '', invited }, headers)
 }
 
 export async function action({ request }: Route.ActionArgs) {

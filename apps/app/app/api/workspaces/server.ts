@@ -25,12 +25,13 @@ const displayName = (identity: SessionIdentity) => {
  * The Supabase trigger normally creates the profile at sign-up; this covers
  * accounts that predate it and keeps the profile row guaranteed.
  */
-async function ensureProfile(identity: SessionIdentity) {
+export async function ensureProfile(identity: SessionIdentity) {
 	const name = displayName(identity)
+	const email = identity.email?.toLowerCase() ?? null
 	return db().profile.upsert({
 		where: { id: identity.sub },
-		create: { id: identity.sub, displayName: name },
-		update: {},
+		create: { id: identity.sub, email, displayName: name },
+		update: email ? { email } : {},
 	})
 }
 

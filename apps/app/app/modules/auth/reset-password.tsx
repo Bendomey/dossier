@@ -14,7 +14,7 @@ import { PasswordStrength } from '~/components/arc/password-strength/password-st
 import type { action, loader } from '~/routes/reset-password'
 
 export function ResetPasswordModule() {
-	const { email } = useLoaderData<typeof loader>()
+	const { email, invited } = useLoaderData<typeof loader>()
 	const result = useActionData<typeof action>()
 	const navigation = useNavigation()
 	const navigate = useNavigate()
@@ -46,8 +46,12 @@ export function ResetPasswordModule() {
 
 	return (
 		<AuthLayout
-			title="Choose a new password"
-			description={`For ${email}.`}
+			title={invited ? 'Set your password' : 'Choose a new password'}
+			description={
+				invited
+					? `You’ve joined the workspace. Choose a password for ${email} to sign in next time.`
+					: `For ${email}.`
+			}
 			switchLead="Changed your mind?"
 			switchLabel="Sign out"
 			switchTo="/logout"

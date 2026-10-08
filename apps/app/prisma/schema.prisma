@@ -156,6 +156,8 @@ enum FindingStatus {
 /// One row per Supabase Auth user; `id` is auth.users.id.
 model Profile {
   id          String   @id @db.Uuid
+  /// Copied from auth.users by triggers (Supabase) so member lists need no auth-schema reads.
+  email       String?
   displayName String?  @map("display_name")
   firstName   String?  @map("first_name")
   lastName    String?  @map("last_name")
@@ -181,6 +183,7 @@ model Profile {
   reviews                   DocumentReview[]
   auditLogs                 AuditLog[]
 
+  @@index([email])
   @@map("profiles")
 }
 
@@ -204,6 +207,7 @@ model Organization {
 
   members                   OrganizationMember[]
   invitations               OrganizationInvitation[]
+  invitationGroups          InvitationGroup[]
   roles                     Role[]
   groups                    Group[]
   groupMembers              GroupMember[]
@@ -266,13 +270,30 @@ model OrganizationInvitation {
   acceptedAt     DateTime?        @map("accepted_at") @db.Timestamptz(3)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invitedBy    Profile?     @relation(fields: [invitedById], references: [id], onDelete: SetNull)
-  role         Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    Profile?          @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+  role         Role?             @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  groups       InvitationGroup[]
 
+  @@unique([organizationId, id])
   @@index([organizationId, status])
   @@index([email])
   @@map("organization_invitations")
+}
+
+/// Groups an invited person joins when they accept.
+model InvitationGroup {
+  organizationId String @map("organization_id") @db.Uuid
+  invitationId   String @map("invitation_id") @db.Uuid
+  groupId        String @map("group_id") @db.Uuid
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitation   OrganizationInvitation @relation(fields: [organizationId, invitationId], references: [organizationId, id], onDelete: Cascade)
+  group        Group                  @relation(fields: [organizationId, groupId], references: [organizationId, id], onDelete: Cascade)
+
+  @@id([invitationId, groupId])
+  @@index([groupId])
+  @@map("invitation_groups")
 }
 
 // ─── Authorization ──────────────────────────────────────────────────────────
@@ -346,6 +367,7 @@ model Group {
   createdBy    Profile?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
   members      GroupMember[]
   collections  CollectionGroup[]
+  invitations  InvitationGroup[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, name])
@@ -531,21 +553,21 @@ model IndexingJob {
 }
 
 model DocumentChunk {
-  id                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId    String                      @map("organization_id") @db.Uuid
+  id                String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                       @map("organization_id") @db.Uuid
   /// Denormalized so retrieval can filter by permitted documents without joining versions.
-  documentId        String                      @map("document_id") @db.Uuid
-  documentVersionId String                      @map("document_version_id") @db.Uuid
-  chunkIndex        Int                         @map("chunk_index")
+  documentId        String                       @map("document_id") @db.Uuid
+  documentVersionId String                       @map("document_version_id") @db.Uuid
+  chunkIndex        Int                          @map("chunk_index")
   content           String
-  contentHash       String                      @map("content_hash")
-  pageNumber        Int?                        @map("page_number")
-  sectionTitle      String?                     @map("section_title")
-  tokenCount        Int                         @map("token_count")
+  contentHash       String                       @map("content_hash")
+  pageNumber        Int?                         @map("page_number")
+  sectionTitle      String?                      @map("section_title")
+  tokenCount        Int                          @map("token_count")
   /// Page, section, heading, paragraph and table positions used by citations.
-  metadata          Json                        @default("{}")
+  metadata          Json                         @default("{}")
   embedding         Unsupported("vector(1536)")?
-  createdAt         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdAt         DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   document        Document          @relation(fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)

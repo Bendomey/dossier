@@ -1,6 +1,7 @@
 import { redirect } from 'react-router'
 import type { Route } from './+types/login'
-import { signInWithPassword } from '~/api/auth/server'
+import { getSessionClaims, signInWithPassword } from '~/api/auth/server'
+import { acceptPendingInvitations } from '~/api/members/server'
 import { redirectIfSignedIn, withHeaders } from '~/lib/actions/auth.server'
 import { safeRedirect } from '~/lib/misc'
 import { pageTitle } from '~/lib/seo'
@@ -30,6 +31,9 @@ export async function action({ request }: Route.ActionArgs) {
 		password: String(form.get('password') ?? ''),
 	})
 	if (failure) return withHeaders(failure, headers, { status: 400 })
+
+	const claims = await getSessionClaims(supabase)
+	if (claims?.email) await acceptPendingInvitations(claims.sub, claims.email)
 
 	throw redirect(safeRedirect(form.get('return_to')), { headers })
 }

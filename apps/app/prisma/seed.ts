@@ -136,6 +136,7 @@ async function seed(tx: Prisma.TransactionClient) {
 		const profile = await tx.profile.create({
 			data: {
 				id: randomUUID(),
+				email: member.email,
 				displayName: member.name,
 				firstName,
 				lastName: rest.join(' '),

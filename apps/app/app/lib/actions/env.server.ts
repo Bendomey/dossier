@@ -14,6 +14,8 @@ const environmentSchema = z.object({
 	SUPABASE_URL: z.string().optional(),
 	/** Supabase's public client key (sb_publishable_..., or the legacy anon key). */
 	SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+	/** Server-only (sb_secret_..., or the legacy service_role key). Used to send invitation emails. */
+	SUPABASE_SECRET_KEY: z.string().optional(),
 })
 
 const environmentVariables = () => environmentSchema.parse(process.env)

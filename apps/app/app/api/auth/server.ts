@@ -3,6 +3,7 @@ import {
 	type EmailOtpType,
 	type SupabaseClient,
 } from '@supabase/supabase-js'
+import { createSupabaseAdminClient } from '~/lib/supabase-admin.server'
 
 export type AuthField = 'name' | 'company' | 'email' | 'password' | 'form'
 
@@ -201,6 +202,47 @@ export async function updatePassword(
 
 	await supabase.auth.signOut({ scope: 'others' })
 	return null
+}
+
+export type InvitationEmailResult =
+	| 'sent'
+	| 'existing-account'
+	| 'not-configured'
+	| 'failed'
+
+/**
+ * Emails an invitation through Supabase, which creates the account and links
+ * back to `redirectTo`. People who already have an account get no email; their
+ * invitation is accepted the next time they sign in.
+ */
+export async function sendInvitationEmail(
+	email: string,
+	redirectTo: string,
+): Promise<InvitationEmailResult> {
+	const admin = createSupabaseAdminClient()
+	if (!admin) return 'not-configured'
+
+	const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+		redirectTo,
+	})
+	if (!error) return 'sent'
+	if (error.code === 'email_exists' || error.code === 'user_already_exists')
+		return 'existing-account'
+	console.error('Invitation email failed', error.code ?? error.message)
+	return 'failed'
+}
+
+/** True when the session came from an emailed link (invite, magic link) rather than a password or Google. */
+export function signedInWithEmailLink(claims: { amr?: unknown }) {
+	const methods = Array.isArray(claims.amr) ? claims.amr : []
+	return methods.some(
+		(entry) =>
+			typeof entry === 'object' &&
+			entry !== null &&
+			['otp', 'invite', 'magiclink'].includes(
+				String((entry as { method?: unknown }).method),
+			),
+	)
 }
 
 /** Verified claims for the request's session, or null when signed out. */

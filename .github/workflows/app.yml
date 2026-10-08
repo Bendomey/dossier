@@ -133,6 +133,7 @@ jobs:
     needs: [changes, code-checks, migrations-check]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.changes.outputs.prisma == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency: deploy-app
 
     defaults:
@@ -180,6 +181,9 @@ jobs:
       contains(fromJSON('["success", "skipped"]'), needs.migrations-check.result) &&
       contains(fromJSON('["success", "skipped"]'), needs.migrate.result)
     runs-on: ubuntu-latest
+    # Without a limit a deploy that never goes healthy holds the deploy-app
+    # queue for GitHub's six-hour default, and every later run waits behind it.
+    timeout-minutes: 15
     concurrency: deploy-app
 
     defaults:
@@ -194,6 +198,6 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: 🚀 Deploy
-        run: flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
+        run: flyctl deploy --remote-only --wait-timeout 5m --build-arg COMMIT_SHA=${{ github.sha }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

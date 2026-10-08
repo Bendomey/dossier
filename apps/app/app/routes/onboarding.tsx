@@ -1,6 +1,7 @@
 import { redirect } from 'react-router'
 import type { Route } from './+types/onboarding'
 import { getSessionClaims } from '~/api/auth/server'
+import { acceptPendingInvitations } from '~/api/members/server'
 import {
 	companyFromSignup,
 	createWorkspace,
@@ -25,6 +26,13 @@ async function requireIdentity(request: Request) {
 export async function loader({ request }: Route.LoaderArgs) {
 	const { claims, headers } = await requireIdentity(request)
 	if (await getSession(claims)) throw redirect('/', { headers })
+
+	if (
+		claims.email &&
+		(await acceptPendingInvitations(claims.sub, claims.email)).length
+	) {
+		throw redirect('/', { headers })
+	}
 
 	const company = companyFromSignup(claims)
 	if (company) {

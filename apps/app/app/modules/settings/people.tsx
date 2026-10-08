@@ -1,14 +1,14 @@
-import { useState } from 'react'
-import { useGetBillingOverview } from '~/api/billing'
-import { useGetGroups } from '~/api/groups'
-import { useGetMembers, useInviteMember, useUpdateMember } from '~/api/members'
+import { useEffect, useRef, useState } from 'react'
+import { useFetcher, useLoaderData } from 'react-router'
 import { Alert } from '~/components/arc/alert/alert'
 import { Avatar } from '~/components/arc/avatar/avatar'
 import { Badge } from '~/components/arc/badge/badge'
 import { Button } from '~/components/arc/button/button'
-import { Skeleton } from '~/components/arc/skeleton/skeleton'
 import { NativeSelect, TextInput } from '~/components/form-controls'
 import { ToggleChip } from '~/components/toggle-chip'
+import { plural } from '~/lib/format'
+import { useSession } from '~/providers/session-provider'
+import type { PeopleActionResult } from '~/routes/_auth.settings.people'
 
 const ROLES: Array<{ role: MemberRole; name: string; description: string }> = [
 	{
@@ -29,104 +29,160 @@ const ROLES: Array<{ role: MemberRole; name: string; description: string }> = [
 	},
 ]
 
-function InviteForm({ groups }: { groups: Group[] }) {
-	const invite = useInviteMember()
-	const assignable = groups.filter((group) => !group.is_builtin)
-	const [email, setEmail] = useState('')
-	const [role, setRole] = useState<InviteMemberInput['role']>('MEMBER')
-	const [groupId, setGroupId] = useState(assignable[0]?.id ?? '')
+type Group = PeopleOverview['groups'][number]
 
-	function submit(event: React.FormEvent) {
-		event.preventDefault()
-		invite.mutate(
-			{ email, role, group_ids: role === 'MEMBER' && groupId ? [groupId] : [] },
-			{ onSuccess: () => setEmail('') },
-		)
-	}
+function InviteForm({ groups }: { groups: Group[] }) {
+	const fetcher = useFetcher<PeopleActionResult>({ key: 'invite' })
+	const formRef = useRef<HTMLFormElement>(null)
+	const [role, setRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER')
+	const sending = fetcher.state !== 'idle'
+
+	useEffect(() => {
+		if (fetcher.state === 'idle' && fetcher.data?.ok) formRef.current?.reset()
+	}, [fetcher.state, fetcher.data])
 
 	return (
-		<form onSubmit={submit} className="flex flex-col gap-2.5">
+		<fetcher.Form ref={formRef} method="post" className="flex flex-col gap-2.5">
+			<input type="hidden" name="intent" value="invite" />
 			<div className="flex flex-wrap gap-2">
 				<TextInput
 					type="email"
+					name="email"
 					required
-					value={email}
-					onChange={(event) => setEmail(event.target.value)}
 					placeholder="Invite by email"
 					aria-label="Email address"
 					className="min-w-[200px] flex-1"
 				/>
 				<NativeSelect
+					name="role"
 					aria-label="Role"
 					value={role}
 					onChange={(event) =>
-						setRole(event.target.value as InviteMemberInput['role'])
+						setRole(event.target.value as 'ADMIN' | 'MEMBER')
 					}
 					className="w-auto"
 				>
 					<option value="MEMBER">Member</option>
 					<option value="ADMIN">Admin</option>
 				</NativeSelect>
-				{role === 'MEMBER' ? (
+				{role === 'MEMBER' && groups.length ? (
 					<NativeSelect
+						name="group_id"
 						aria-label="Group"
-						value={groupId}
-						onChange={(event) => setGroupId(event.target.value)}
+						defaultValue={groups[0]?.id}
 						className="w-auto"
 					>
-						{assignable.map((group) => (
+						<option value="">No group</option>
+						{groups.map((group) => (
 							<option key={group.id} value={group.id}>
 								{group.name}
 							</option>
 						))}
 					</NativeSelect>
 				) : null}
-				<Button type="submit" size="lg" loading={invite.isPending}>
+				<Button type="submit" size="lg" loading={sending}>
 					Invite
 				</Button>
 			</div>
-			{invite.isError ? (
+			{fetcher.data?.error ? (
 				<Alert tone="danger" title="Invite not sent">
-					{invite.error.message}
+					{fetcher.data.error}
 				</Alert>
-			) : invite.isSuccess ? (
-				<p role="status" className="text-success text-[13px]">
-					Invite sent to {invite.data.email}.
+			) : fetcher.data?.message ? (
+				<p
+					role="status"
+					className={
+						fetcher.data.ok
+							? 'text-success text-[13px]'
+							: 'text-warning text-[13px]'
+					}
+				>
+					{fetcher.data.message}
 				</p>
 			) : null}
-		</form>
+		</fetcher.Form>
 	)
 }
 
-function MemberRow({ member, groups }: { member: Member; groups: Group[] }) {
-	const update = useUpdateMember()
-	const [editing, setEditing] = useState(false)
-	const isAdmin = member.role !== 'MEMBER'
-	const assignable = groups.filter((group) => !group.is_builtin)
-	const memberGroups = assignable.filter((group) =>
-		member.group_ids.includes(group.id),
+function GroupChips({
+	groupIds,
+	groups,
+}: {
+	groupIds: string[]
+	groups: Group[]
+}) {
+	const names = groups.filter((group) => groupIds.includes(group.id))
+	return (
+		<>
+			{names.map((group) => (
+				<span
+					key={group.id}
+					className="bg-surface-muted flex h-[26px] items-center rounded-full px-2.5 text-xs"
+				>
+					{group.name}
+				</span>
+			))}
+		</>
 	)
+}
+
+function MemberRow({
+	member,
+	groups,
+}: {
+	member: OrganizationPerson
+	groups: Group[]
+}) {
+	const { can, user } = useSession()
+	const fetcher = useFetcher<PeopleActionResult>({
+		key: `member:${member.membership_id}`,
+	})
+	const [editing, setEditing] = useState(false)
+
+	const pending = fetcher.formData
+	const role =
+		pending?.get('intent') === 'change-role'
+			? (pending.get('role') as MemberRole)
+			: member.role
+	const groupIds =
+		pending?.get('intent') === 'set-groups'
+			? (pending.getAll('group_ids') as string[])
+			: member.group_ids
+	const isAdmin = role !== 'MEMBER'
+	const isSelf = member.user_id === user.id
+
+	function submit(values: Record<string, string | string[]>) {
+		const body = new FormData()
+		body.set('membership_id', member.membership_id)
+		for (const [key, value] of Object.entries(values)) {
+			if (Array.isArray(value)) value.forEach((item) => body.append(key, item))
+			else body.set(key, value)
+		}
+		void fetcher.submit(body, { method: 'post' })
+	}
 
 	function toggleGroup(groupId: string) {
-		update.mutate({
-			memberId: member.id,
-			group_ids: member.group_ids.includes(groupId)
-				? member.group_ids.filter((item) => item !== groupId)
-				: [...member.group_ids, groupId],
+		submit({
+			intent: 'set-groups',
+			group_ids: groupIds.includes(groupId)
+				? groupIds.filter((id) => id !== groupId)
+				: [...groupIds, groupId],
 		})
 	}
 
 	return (
 		<li className="border-border-subtle flex flex-col border-t first:border-t-0">
 			<div className="flex flex-wrap items-center gap-3.5 px-[18px] py-3.5">
-				<Avatar name={member.name} size="sm" />
+				<Avatar
+					name={member.name}
+					src={member.avatar_url ?? undefined}
+					size="sm"
+				/>
 				<span className="flex min-w-40 flex-1 flex-col">
 					<span className="flex items-center gap-2 text-sm font-medium">
 						{member.name}
-						{member.invited ? (
-							<Badge tone="info" size="sm">
-								Invited
-							</Badge>
+						{isSelf ? (
+							<span className="text-muted text-xs font-normal">You</span>
 						) : null}
 					</span>
 					<span className="text-muted truncate text-[13px]">
@@ -138,43 +194,35 @@ function MemberRow({ member, groups }: { member: Member; groups: Group[] }) {
 						<span className="text-secondary text-[13px]">All documents</span>
 					) : (
 						<>
-							{memberGroups.map((group) => (
-								<span
-									key={group.id}
-									className="bg-surface-muted flex h-[26px] items-center rounded-full px-2.5 text-xs"
-								>
-									{group.name}
-								</span>
-							))}
-							{memberGroups.length === 0 ? (
+							<GroupChips groupIds={groupIds} groups={groups} />
+							{groupIds.length === 0 ? (
 								<span className="text-warning text-[13px]">
 									No groups yet, sees Everyone documents only
 								</span>
 							) : null}
-							<button
-								type="button"
-								aria-expanded={editing}
-								onClick={() => setEditing(!editing)}
-								className="text-accent hover:bg-accent-subtle h-[26px] cursor-pointer rounded-[10px] px-2.5 text-[13px]"
-							>
-								{editing ? 'Done' : 'Edit groups'}
-							</button>
+							{can('groups.manage') && groups.length ? (
+								<button
+									type="button"
+									aria-expanded={editing}
+									onClick={() => setEditing(!editing)}
+									className="text-accent hover:bg-accent-subtle h-[26px] cursor-pointer rounded-[10px] px-2.5 text-[13px]"
+								>
+									{editing ? 'Done' : 'Edit groups'}
+								</button>
+							) : null}
 						</>
 					)}
 				</span>
-				{member.role === 'OWNER' ? (
+				{role === 'OWNER' || !can('roles.manage') ? (
 					<span className="text-secondary w-[104px] pl-2.5 text-[13px]">
-						Owner
+						{ROLES.find((item) => item.role === role)?.name}
 					</span>
 				) : (
 					<NativeSelect
 						aria-label={`Role for ${member.name}`}
-						value={member.role}
+						value={role}
 						onChange={(event) =>
-							update.mutate({
-								memberId: member.id,
-								role: event.target.value as InviteMemberInput['role'],
-							})
+							submit({ intent: 'change-role', role: event.target.value })
 						}
 						className="border-border h-[34px] w-[104px] rounded-[14px] px-2.5 text-[13px]"
 					>
@@ -183,16 +231,24 @@ function MemberRow({ member, groups }: { member: Member; groups: Group[] }) {
 					</NativeSelect>
 				)}
 			</div>
+			{fetcher.data?.error ? (
+				<p
+					role="alert"
+					className="text-danger px-[18px] pb-3 pl-[66px] text-[13px]"
+				>
+					{fetcher.data.error}
+				</p>
+			) : null}
 			{editing && !isAdmin ? (
 				<div className="animate-in fade-in slide-in-from-bottom-1 flex flex-col gap-2 pr-[18px] pb-4 pl-[66px] duration-250">
 					<span className="text-secondary text-[13px]">
 						Groups for {member.name}
 					</span>
 					<div className="flex flex-wrap gap-1.5">
-						{assignable.map((group) => (
+						{groups.map((group) => (
 							<ToggleChip
 								key={group.id}
-								pressed={member.group_ids.includes(group.id)}
+								pressed={groupIds.includes(group.id)}
 								onPressedChange={() => toggleGroup(group.id)}
 							>
 								{group.name}
@@ -205,13 +261,74 @@ function MemberRow({ member, groups }: { member: Member; groups: Group[] }) {
 	)
 }
 
-export function PeopleSettingsModule() {
-	const { data: members, isPending } = useGetMembers()
-	const { data: groups } = useGetGroups()
-	const { data: billing } = useGetBillingOverview()
+function InvitationRow({
+	invitation,
+	groups,
+}: {
+	invitation: PendingInvitation
+	groups: Group[]
+}) {
+	const { can } = useSession()
+	const fetcher = useFetcher<PeopleActionResult>({
+		key: `invitation:${invitation.id}`,
+	})
+	if (
+		fetcher.formData?.get('intent') === 'revoke' ||
+		(fetcher.state === 'idle' && fetcher.data?.ok)
+	)
+		return null
 
-	if (isPending || !members || !groups)
-		return <Skeleton avatar lines={6} label="Loading people" />
+	return (
+		<li className="border-border-subtle flex flex-col border-t first:border-t-0">
+			<div className="flex flex-wrap items-center gap-3.5 px-[18px] py-3.5">
+				<Avatar name={invitation.email} size="sm" />
+				<span className="flex min-w-40 flex-1 flex-col">
+					<span className="flex items-center gap-2 text-sm font-medium">
+						{invitation.email.split('@')[0]}
+						<Badge tone="info" size="sm">
+							Invited
+						</Badge>
+					</span>
+					<span className="text-muted truncate text-[13px]">
+						{invitation.email}
+					</span>
+				</span>
+				<span className="flex flex-wrap items-center gap-1.5">
+					{invitation.role === 'ADMIN' ? (
+						<span className="text-secondary text-[13px]">All documents</span>
+					) : (
+						<GroupChips groupIds={invitation.group_ids} groups={groups} />
+					)}
+				</span>
+				<span className="text-secondary w-[104px] pl-2.5 text-[13px]">
+					{invitation.role === 'ADMIN' ? 'Admin' : 'Member'}
+				</span>
+				{can('members.invite') ? (
+					<fetcher.Form method="post">
+						<input type="hidden" name="intent" value="revoke" />
+						<input type="hidden" name="invitation_id" value={invitation.id} />
+						<Button type="submit" variant="ghost" size="sm">
+							Revoke
+						</Button>
+					</fetcher.Form>
+				) : null}
+			</div>
+			{fetcher.data?.error ? (
+				<p
+					role="alert"
+					className="text-danger px-[18px] pb-3 pl-[66px] text-[13px]"
+				>
+					{fetcher.data.error}
+				</p>
+			) : null}
+		</li>
+	)
+}
+
+export function PeopleSettingsModule() {
+	const { members, invitations, groups } = useLoaderData() as PeopleOverview
+	const { can } = useSession()
+	const editableGroups = groups.filter((group) => !group.is_system)
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -237,14 +354,27 @@ export function PeopleSettingsModule() {
 				A role sets what someone can do. Groups set which documents a member can
 				see. Owners and admins can see every document.
 			</p>
-			<InviteForm groups={groups} />
+			{can('members.invite') ? <InviteForm groups={editableGroups} /> : null}
 			<p className="text-secondary text-[13px] tabular-nums">
-				{members.length} of {billing?.seats.limit ?? '–'} seats used on the{' '}
-				{billing?.plan_label.split(',')[0] ?? ''} plan
+				{plural(members.length, 'person', 'people')}
+				{invitations.length
+					? ` · ${plural(invitations.length, 'pending invitation')}`
+					: ''}
 			</p>
 			<ul className="overflow-hidden rounded-[26px] border">
 				{members.map((member) => (
-					<MemberRow key={member.id} member={member} groups={groups} />
+					<MemberRow
+						key={member.membership_id}
+						member={member}
+						groups={editableGroups}
+					/>
+				))}
+				{invitations.map((invitation) => (
+					<InvitationRow
+						key={invitation.id}
+						invitation={invitation}
+						groups={editableGroups}
+					/>
 				))}
 			</ul>
 		</div>
