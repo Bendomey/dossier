@@ -112,6 +112,35 @@ types/                Global domain types (*.d.ts)
 - Public demo: `/demo/*` re-exports the real page routes inside `routes/demo.tsx` (sample owner, no auth, light theme). The website embeds it in its product demo; only the website may frame it (`frame-ancestors` in `entry.server.tsx`). `?play=ask|review|draft|compare` auto-types and sends that task's first example
 - Never hard-code in-app paths: use `useAppBase().path('/knowledge')` so links work both in the app and under `/demo`
 
+## Database (apps/app)
+
+Supabase Postgres, accessed only from server code (loaders, actions, `*.server.ts`) through Prisma 7.10. Supabase Auth owns users; `profiles.id` is `auth.users.id`.
+
+**Files:** `prisma/schema.prisma` (schema), `prisma/migrations/` (history), `prisma7.config.ts` (CLI config: Prisma 7.10 names it this to avoid clashing with Prisma 8), `prisma/seed.ts` (dev data), `app/lib/db.server.ts` (the client: `db().document.findMany(...)`). The client is generated into `app/generated/prisma` (gitignored); `build` and `types:check` regenerate it.
+
+**Commands (apps/app):**
+```bash
+yarn db:migrate --name <change>   # create + apply a migration (local DB only)
+yarn db:generate                  # regenerate the client (migrate no longer does this in Prisma 7)
+yarn db:seed                      # reset and load the Asante & Co. sample data (refuses NODE_ENV=production)
+yarn db:deploy                    # apply pending migrations to Supabase
+yarn db:studio
+```
+
+**Rules:**
+- Every tenant table has `organization_id`; children reference parents with a composite `(organization_id, <parent>_id)` foreign key so cross-organization links are impossible. Keep this for new tables, and add `@@unique([organizationId, id])` to anything that will be referenced
+- In nested Prisma creates, omit `organizationId` on children: Prisma takes it from the parent through the composite key
+- IDs and `updated_at` are set by Postgres (`gen_random_uuid()`, `now()` plus the `set_updated_at` trigger) so services writing outside Prisma stay correct. New tables with `updated_at` need the trigger line
+- Every new table needs `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` in its migration: without it Supabase's REST API exposes the table to the anon key. Membership-based RLS policies are still to be written
+- Hand-written SQL (check constraints, partial indexes, triggers, data) goes in a `--create-only` migration. Prisma cannot declare HNSW indexes and drops any it finds, so the embedding index is deferred (see the `defer_embedding_index` migration)
+- `migrate dev` runs only against the local database. Supabase gets `migrate deploy` from CI (see Deployment); runtime uses `DATABASE_URL` (transaction pooler, port 6543)
+- Migrations run before the new code is deployed, so the running (old) code must keep working on the migrated schema: add columns and tables first, and remove or rename them in a later release once no deployed code uses them
+- System roles (Owner, Admin, Member, Viewer) and the permission catalogue are migration data, not seed data
+- Local development uses Postgres.app (`DATABASE_URL="postgresql://<you>@localhost:5432/dossier"`); the Supabase-only parts (auth.users link, profile-on-signup trigger) skip themselves there
+- `yarn db:seed` deletes all data first, so it refuses any non-local database (override with `ALLOW_REMOTE_SEED=true` only for a disposable one). `yarn db:reset` asks for confirmation
+- A new Supabase project needs pgvector enabled in the `extensions` schema before the first deploy (`create extension if not exists vector with schema extensions;`, or Database > Extensions in the dashboard); otherwise the init migration installs it into `public`, which Supabase's security advisor flags
+- Comparing schema.prisma directly against Supabase (`migrate diff --from-config-datasource`, `db pull`) fails with P4002 because `profiles` references `auth.users` across schemas. That is expected; CI's migrations check proves migrations match the schema, and `migrate status` shows what Supabase has applied
+
 ## Links Between the Website and the App
 
 - Every link from one app to the other MUST carry UTM parameters. Build it with `useAppUrl()` (website, `~/lib/use-app-url`) or `useWebsiteUrl()` (app, `~/lib/use-website-url`), passing a `placement` that names the link (e.g. `header_sign_in`). Server code uses `crossAppUrl()` from `~/lib/utm` with `resolveUtm()` from `~/lib/utm.server`
@@ -143,8 +172,9 @@ When adding a new publicly accessible page to `apps/website`:
 
 - **Platform:** Fly.io, one environment per app: `apps/website/fly.toml` (app `dossier`), `apps/app/fly.toml` (app `dossier-africa`)
 - **CI/CD:** `.github/workflows/website.yml` and `.github/workflows/app.yml`. Pull requests run lint and type checks; every push to `main` runs the checks and, only if they pass, deploys. There is no staging environment or `prod` branch
+- **App database migrations:** when a push to `main` changes `apps/app/prisma`, `app.yml` runs `prisma migrate deploy` against Supabase after the checks and before the Fly deploy; if it fails, nothing deploys. Pull requests that change `apps/app/prisma` first apply all migrations to an empty pgvector Postgres, check they match `schema.prisma` and run the seed. A failed migration is not retried by later pushes that leave `prisma/` untouched: re-run it with "Run workflow" on the App workflow (manual runs always migrate)
 - **Manual deploy:** `make deploy` from the app's folder (or run the workflow manually from the Actions tab)
-- **Secrets:** runtime env vars (`GOOGLE_TRANSLATE_API_KEY`, `GOOGLE_ANALYTICS_ID`, `API_ADDRESS`) are set with `fly secrets set`, never committed. CI needs a `FLY_API_TOKEN` repository secret
+- **Secrets:** runtime env vars (`GOOGLE_TRANSLATE_API_KEY`, `GOOGLE_ANALYTICS_ID`, `SESSION_SECRET`, `DATABASE_URL`) are set with `fly secrets set`, never committed. GitHub needs `FLY_API_TOKEN` and, for migrations, `DIRECT_URL` (or `DATABASE_URL`): Supabase's session pooler string (port 5432 on the pooler host). Not the transaction pooler (port 6543), which cannot run migrations, and not the direct `db.<ref>.supabase.co` host, which is IPv6-only and unreachable from GitHub's runners. The app deploy fails if the secret is missing or points at port 6543
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 

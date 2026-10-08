@@ -9,6 +9,8 @@ const environmentSchema = z.object({
 		.default('development'),
 	API_ADDRESS: z.string().min(1).default('http://localhost:5000/api'),
 	SESSION_SECRET: z.string().min(1).default('dev-only-session-secret'),
+	/** Pooled runtime connection (Supabase transaction pooler, port 6543). */
+	DATABASE_URL: z.string().optional(),
 })
 
 const environmentVariables = () => environmentSchema.parse(process.env)

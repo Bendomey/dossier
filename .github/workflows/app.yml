@@ -42,10 +42,143 @@ jobs:
       - name: 🔎 Type check
         run: yarn types:check
 
+  changes:
+    name: 🔎 Detect database changes
+    runs-on: ubuntu-latest
+    outputs:
+      prisma: ${{ steps.filter.outputs.prisma }}
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Manual runs always migrate, so a failed migration can be retried
+      # without touching apps/app/prisma. An unknown base (new branch, force
+      # push) also migrates: `migrate deploy` is a no-op when nothing is pending.
+      - name: 🔎 Did apps/app/prisma change?
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          base="$PUSH_BASE"
+          [ "$EVENT" = "pull_request" ] && base="$PR_BASE"
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed=true
+          elif git diff --quiet "$base" "$HEAD" -- apps/app/prisma; then
+            changed=false
+          else
+            changed=true
+          fi
+          echo "prisma=$changed" >> "$GITHUB_OUTPUT"
+          echo "apps/app/prisma changed: $changed"
+
+  migrations-check:
+    name: 🗄️ Migrations apply cleanly
+    needs: changes
+    if: needs.changes.outputs.prisma == 'true'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dossier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dossier
+
+    defaults:
+      run:
+        working-directory: apps/app
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+          cache-dependency-path: 'apps/app/yarn.lock'
+
+      - name: 📥 Download deps
+        run: yarn install --frozen-lockfile
+
+      - name: 🧱 Apply every migration to an empty database
+        run: yarn db:deploy
+
+      - name: 🔍 Migrations match schema.prisma
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: 🌱 Seed runs against the migrated schema
+        run: yarn db:generate && yarn db:seed
+
+  migrate:
+    name: 🗄️ Migrate database
+    needs: [changes, code-checks, migrations-check]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.changes.outputs.prisma == 'true'
+    runs-on: ubuntu-latest
+    concurrency: deploy-app
+
+    defaults:
+      run:
+        working-directory: apps/app
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+          cache-dependency-path: 'apps/app/yarn.lock'
+
+      - name: 📥 Download deps
+        run: yarn install --frozen-lockfile
+
+      - name: 🗄️ Apply pending migrations
+        env:
+          DIRECT_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DIRECT_URL" ]; then
+            echo "::error title=Database secret missing::Add a DIRECT_URL (or DATABASE_URL) repository secret with the Supabase session pooler connection string."
+            exit 1
+          fi
+          if echo "$DIRECT_URL" | grep -q ':6543/'; then
+            echo "::error title=Wrong connection string::Migrations cannot run through Supabase's transaction pooler (port 6543). Use the session pooler string (port 5432 on the pooler host)."
+            exit 1
+          fi
+          yarn db:deploy
+
+  # Deploys when migrations succeeded or were not needed. A skipped job would
+  # normally skip everything after it, so the outcome of each dependency is
+  # checked explicitly; any failure blocks the deploy.
   deploy:
     name: 🚀 Deploy
-    needs: code-checks
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [code-checks, migrations-check, migrate]
+    if: >-
+      !cancelled() &&
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request' &&
+      needs.code-checks.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.migrations-check.result) &&
+      contains(fromJSON('["success", "skipped"]'), needs.migrate.result)
     runs-on: ubuntu-latest
     concurrency: deploy-app
 

@@ -4,7 +4,7 @@ import { config as defaultConfig } from '@epic-web/config/eslint'
 export default [
 	...defaultConfig,
 	{
-		ignores: ['app/components/arc/**'],
+		ignores: ['app/components/arc/**', 'app/generated/**'],
 	},
 	{
 		rules: {
