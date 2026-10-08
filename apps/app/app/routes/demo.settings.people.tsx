@@ -19,6 +19,7 @@ export function loader(): PeopleOverview {
 			role: member.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
 			group_ids: member.group_ids,
 			expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+			expired: false,
 		})),
 		groups: GROUPS.map((group) => ({
 			id: group.id,

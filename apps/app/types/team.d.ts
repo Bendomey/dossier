@@ -37,10 +37,24 @@ interface PendingInvitation {
 	role: Exclude<MemberRole, 'OWNER'>
 	group_ids: string[]
 	expires_at: string
+	expired: boolean
 }
 
 interface PeopleOverview {
 	members: OrganizationPerson[]
 	invitations: PendingInvitation[]
 	groups: Array<{ id: string; name: string; is_system: boolean }>
+}
+
+/** Settings, Groups: every group with who is in it and which collections it can see. */
+interface GroupsOverview {
+	groups: Array<{
+		id: string
+		name: string
+		is_system: boolean
+		membership_ids: string[]
+		collection_ids: string[]
+	}>
+	members: Array<{ membership_id: string; name: string; role: MemberRole }>
+	collections: Array<{ id: string; name: string }>
 }

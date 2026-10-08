@@ -1,15 +1,15 @@
 import { redirect } from 'react-router'
 import type { Route } from './+types/auth.callback'
-import {
-	completeAuthRedirect,
-	getSessionClaims,
-	signedInWithEmailLink,
-} from '~/api/auth/server'
-import { landingAfterSignIn } from '~/api/members/server'
+import { completeAuthRedirect, getSessionClaims } from '~/api/auth/server'
+import { emailLinkDestination, landingAfterSignIn } from '~/api/members/server'
 import { safeRedirect } from '~/lib/misc'
 import { createSupabaseServerClient } from '~/lib/supabase.server'
 
-/** Lands Google sign-ins and email links (confirmation, magic link) and starts the session. */
+/**
+ * Lands Google sign-ins and email links that use a code or token hash. Links
+ * that carry the session in the URL fragment never reach the server here: they
+ * end up on /login, which hands the tokens to /auth/session.
+ */
 export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url)
 	const { supabase, headers } = createSupabaseServerClient(request)
@@ -22,18 +22,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const target = safeRedirect(url.searchParams.get('next'))
 	const claims = await getSessionClaims(supabase)
-	const { path, joined } = claims
+	const landing = claims
 		? await landingAfterSignIn(claims, target)
 		: { path: target, joined: [] }
 
-	// Invited people arrive through the emailed link with no password yet.
-	if (
-		joined.length &&
-		claims &&
-		signedInWithEmailLink(claims) &&
-		url.searchParams.get('type') === 'invite'
-	) {
-		throw redirect('/reset-password?invited=1', { headers })
-	}
-	throw redirect(path, { headers })
+	throw redirect(emailLinkDestination(url.searchParams.get('type'), landing), {
+		headers,
+	})
 }

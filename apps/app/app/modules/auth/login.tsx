@@ -8,6 +8,7 @@ import {
 } from 'react-router'
 import { AuthLayout } from './auth-layout'
 import { GoogleButton, OrDivider } from './google-button'
+import { useEmailLinkSession } from './use-email-link-session'
 import { Alert } from '~/components/arc/alert/alert'
 import { Button } from '~/components/arc/button/button'
 import { Input } from '~/components/arc/input/input'
@@ -16,6 +17,7 @@ import type { action, loader } from '~/routes/login'
 
 export function LoginModule() {
 	const { linkError } = useLoaderData<typeof loader>()
+	const emailLink = useEmailLinkSession()
 	const result = useActionData<typeof action>()
 	const navigation = useNavigation()
 	const [searchParams] = useSearchParams()
@@ -31,9 +33,19 @@ export function LoginModule() {
 			switchLabel="Create account"
 			switchTo="/signup"
 		>
-			{linkError ? (
+			{emailLink === 'signing-in' ? (
+				<Alert tone="info" title="Signing you in…">
+					One moment while we open your workspace.
+				</Alert>
+			) : emailLink === 'expired' ? (
+				<Alert tone="danger" title="That link has expired">
+					Ask whoever invited you to resend the invitation, or use Forgot
+					password below to get a new link.
+				</Alert>
+			) : emailLink === 'failed' || linkError ? (
 				<Alert tone="danger" title="Couldn’t sign you in">
-					{linkError}
+					{linkError ??
+						'That sign-in link is invalid or has expired. Sign in, or request a new link.'}
 				</Alert>
 			) : null}
 			{result?.field === 'form' ? (

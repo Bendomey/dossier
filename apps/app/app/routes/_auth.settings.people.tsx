@@ -7,6 +7,7 @@ import {
 	changeMemberRole,
 	createInvitation,
 	removeMember,
+	renewInvitation,
 	getPeopleOverview,
 	revokeInvitation,
 	setMemberGroups,
@@ -36,6 +37,7 @@ const actionSchema = z.discriminatedUnion('intent', [
 	}),
 	z.object({ intent: z.literal('revoke'), invitation_id: uuid }),
 	z.object({ intent: z.literal('remove'), membership_id: uuid }),
+	z.object({ intent: z.literal('resend'), invitation_id: uuid }),
 ])
 
 export type PeopleActionResult = {
@@ -49,9 +51,20 @@ const INVITE_MESSAGES = {
 	'existing-account': (email: string) =>
 		`Invitation saved. ${email} already has a Dossier account, so they’ll see it in their workspace switcher next time they open Dossier.`,
 	'not-configured': (email: string) =>
-		`Invitation saved for ${email}, but no email was sent: add SUPABASE_SECRET_KEY to send invitations.`,
+		`Invitation saved for ${email}, but no email was sent because invitation emails aren’t set up yet.`,
 	failed: (email: string) =>
 		`Invitation saved for ${email}, but the email couldn’t be sent. Try again later.`,
+}
+
+const RESEND_MESSAGES = {
+	sent: (email: string) =>
+		`Sent a new link to ${email}. The invitation is good for another 7 days.`,
+	'existing-account': (email: string) =>
+		`Extended for 7 days. ${email} already uses Dossier, so they’ll see it in their workspace switcher.`,
+	'not-configured': () =>
+		'Extended for 7 days, but no email was sent because invitation emails aren’t set up yet.',
+	failed: () =>
+		'Extended for 7 days, but the email couldn’t be sent. Try again later.',
 }
 
 export async function loader({ context }: Route.LoaderArgs) {
@@ -118,6 +131,22 @@ export async function action({ request, context }: Route.ActionArgs) {
 					input.group_ids,
 				)
 				return { ok: true }
+			case 'resend': {
+				requirePermission(session, 'members.invite')
+				const email = await renewInvitation(
+					organizationId,
+					actorId,
+					input.invitation_id,
+				)
+				const delivery = await sendInvitationEmail(
+					email,
+					`${getRequestOrigin(request)}/auth/callback?next=/`,
+				)
+				return {
+					ok: delivery !== 'failed',
+					message: RESEND_MESSAGES[delivery](email),
+				}
+			}
 			case 'remove':
 				requirePermission(session, 'members.remove')
 				await removeMember(organizationId, actorId, input.membership_id)

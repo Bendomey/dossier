@@ -324,14 +324,20 @@ function InvitationRow({
 	groups: Group[]
 }) {
 	const { can } = useSession()
-	const fetcher = useFetcher<PeopleActionResult>({
-		key: `invitation:${invitation.id}`,
+	const revoke = useFetcher<PeopleActionResult>({
+		key: `invitation-revoke:${invitation.id}`,
 	})
-	if (
-		fetcher.formData?.get('intent') === 'revoke' ||
-		(fetcher.state === 'idle' && fetcher.data?.ok)
-	)
+	const resend = useFetcher<PeopleActionResult>({
+		key: `invitation-resend:${invitation.id}`,
+	})
+	if (revoke.formData || (revoke.state === 'idle' && revoke.data?.ok)) {
 		return null
+	}
+
+	const renewed = resend.state === 'idle' && resend.data?.ok
+	const expired = invitation.expired && !renewed
+	const error = revoke.data?.error ?? resend.data?.error
+	const notice = resend.state === 'idle' ? resend.data?.message : undefined
 
 	return (
 		<li className="border-border-subtle flex flex-col border-t first:border-t-0">
@@ -340,8 +346,8 @@ function InvitationRow({
 				<span className="flex min-w-40 flex-1 flex-col">
 					<span className="flex items-center gap-2 text-sm font-medium">
 						{invitation.email.split('@')[0]}
-						<Badge tone="info" size="sm">
-							Invited
+						<Badge tone={expired ? 'warning' : 'info'} size="sm">
+							{expired ? 'Invitation expired' : 'Invited'}
 						</Badge>
 					</span>
 					<span className="text-muted truncate text-[13px]">
@@ -359,21 +365,42 @@ function InvitationRow({
 					{invitation.role === 'ADMIN' ? 'Admin' : 'Member'}
 				</span>
 				{can('members.invite') ? (
-					<fetcher.Form method="post">
-						<input type="hidden" name="intent" value="revoke" />
-						<input type="hidden" name="invitation_id" value={invitation.id} />
-						<Button type="submit" variant="ghost" size="sm">
-							Revoke
-						</Button>
-					</fetcher.Form>
+					<span className="flex gap-1">
+						<resend.Form method="post">
+							<input type="hidden" name="intent" value="resend" />
+							<input type="hidden" name="invitation_id" value={invitation.id} />
+							<Button
+								type="submit"
+								variant="ghost"
+								size="sm"
+								loading={resend.state !== 'idle'}
+							>
+								Resend
+							</Button>
+						</resend.Form>
+						<revoke.Form method="post">
+							<input type="hidden" name="intent" value="revoke" />
+							<input type="hidden" name="invitation_id" value={invitation.id} />
+							<Button type="submit" variant="ghost" size="sm">
+								Revoke
+							</Button>
+						</revoke.Form>
+					</span>
 				) : null}
 			</div>
-			{fetcher.data?.error ? (
+			{error ? (
 				<p
 					role="alert"
 					className="text-danger px-[18px] pb-3 pl-[66px] text-[13px]"
 				>
-					{fetcher.data.error}
+					{error}
+				</p>
+			) : notice ? (
+				<p
+					role="status"
+					className={`px-[18px] pb-3 pl-[66px] text-[13px] ${resend.data?.ok ? 'text-success' : 'text-warning'}`}
+				>
+					{notice}
 				</p>
 			) : null}
 		</li>

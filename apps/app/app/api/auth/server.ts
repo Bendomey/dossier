@@ -3,6 +3,7 @@ import {
 	type EmailOtpType,
 	type SupabaseClient,
 } from '@supabase/supabase-js'
+import { db } from '~/lib/db.server'
 import { createSupabaseAdminClient } from '~/lib/supabase-admin.server'
 
 export type AuthField = 'name' | 'company' | 'email' | 'password' | 'form'
@@ -21,7 +22,8 @@ function toFailure(error: AuthError): AuthFailure {
 		case 'invalid_credentials':
 			return {
 				field: 'password',
-				error: 'That email and password don’t match.',
+				error:
+					'That email and password don’t match. Invited to a workspace? Use the link in your invitation email, or set a password with Forgot password.',
 			}
 		case 'email_not_confirmed':
 			return {
@@ -32,7 +34,8 @@ function toFailure(error: AuthError): AuthFailure {
 		case 'email_exists':
 			return {
 				field: 'email',
-				error: 'An account with this email already exists. Sign in instead.',
+				error:
+					'An account with this email already exists. Sign in instead, or if you were invited and have no password yet, set one with Forgot password.',
 			}
 		case 'weak_password':
 			return { field: 'password', error: 'Choose a stronger password.' }
@@ -210,10 +213,19 @@ export type InvitationEmailResult =
 	| 'not-configured'
 	| 'failed'
 
+/** True for an account that exists but has never signed in, such as one created by an earlier invitation. */
+async function neverSignedIn(email: string) {
+	const rows = await db().$queryRaw<Array<{ never: boolean }>>`
+		SELECT u.last_sign_in_at IS NULL AS never FROM auth.users u WHERE lower(u.email) = ${email.toLowerCase()} LIMIT 1`
+	return rows[0]?.never ?? false
+}
+
 /**
- * Emails an invitation through Supabase, which creates the account and links
- * back to `redirectTo`. People who already have an account get no email; their
- * invitation is accepted the next time they sign in.
+ * Emails an invitation through Supabase. New addresses get Supabase's invite
+ * email, which creates the account. An account an earlier invitation created
+ * but nobody used gets a set-password link instead, since Supabase won't
+ * invite an existing account. Anyone who has signed in before gets no email:
+ * the invitation waits in their workspace switcher.
  */
 export async function sendInvitationEmail(
 	email: string,
@@ -226,23 +238,35 @@ export async function sendInvitationEmail(
 		redirectTo,
 	})
 	if (!error) return 'sent'
-	if (error.code === 'email_exists' || error.code === 'user_already_exists')
-		return 'existing-account'
-	console.error('Invitation email failed', error.code ?? error.message)
+	if (error.code !== 'email_exists' && error.code !== 'user_already_exists') {
+		console.error('Invitation email failed', error.code ?? error.message)
+		return 'failed'
+	}
+	if (!(await neverSignedIn(email))) return 'existing-account'
+
+	const reset = await admin.auth.resetPasswordForEmail(email, { redirectTo })
+	if (!reset.error) return 'sent'
+	console.error(
+		'Invitation email failed',
+		reset.error.code ?? reset.error.message,
+	)
 	return 'failed'
 }
 
-/** True when the session came from an emailed link (invite, magic link) rather than a password or Google. */
-export function signedInWithEmailLink(claims: { amr?: unknown }) {
-	const methods = Array.isArray(claims.amr) ? claims.amr : []
-	return methods.some(
-		(entry) =>
-			typeof entry === 'object' &&
-			entry !== null &&
-			['otp', 'invite', 'magiclink'].includes(
-				String((entry as { method?: unknown }).method),
-			),
-	)
+/**
+ * Starts a session from tokens an email link delivered in the URL fragment
+ * (Supabase's default invite and recovery links). The tokens are checked with
+ * Supabase before any cookie is set.
+ */
+export async function startSessionFromTokens(
+	supabase: SupabaseClient,
+	tokens: { accessToken: string; refreshToken: string },
+): Promise<AuthFailure | null> {
+	const { error } = await supabase.auth.setSession({
+		access_token: tokens.accessToken,
+		refresh_token: tokens.refreshToken,
+	})
+	return error ? toFailure(error) : null
 }
 
 /** Verified claims for the request's session, or null when signed out. */

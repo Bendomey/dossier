@@ -68,11 +68,7 @@ export async function getPeopleOverview(
 			},
 		}),
 		db().organizationInvitation.findMany({
-			where: {
-				organizationId,
-				status: 'PENDING',
-				expiresAt: { gt: new Date() },
-			},
+			where: { organizationId, status: 'PENDING' },
 			orderBy: { createdAt: 'asc' },
 			include: { role: true, groups: { select: { groupId: true } } },
 		}),
@@ -99,6 +95,7 @@ export async function getPeopleOverview(
 			role: invitation.role?.name === 'Admin' ? 'ADMIN' : 'MEMBER',
 			group_ids: invitation.groups.map(({ groupId }) => groupId),
 			expires_at: invitation.expiresAt.toISOString(),
+			expired: invitation.expiresAt <= new Date(),
 		})),
 		groups: groups.map((group) => ({
 			id: group.id,
@@ -138,6 +135,15 @@ export async function createInvitation(
 		if (pending)
 			throw new MemberError(`${email} already has a pending invitation.`)
 
+		await tx.organizationInvitation.updateMany({
+			where: {
+				organizationId,
+				email,
+				status: 'PENDING',
+				expiresAt: { lte: new Date() },
+			},
+			data: { status: 'EXPIRED' },
+		})
 		const groupIds =
 			input.role === 'MEMBER'
 				? await editableGroupIds(tx, organizationId, input.groupIds)
@@ -164,6 +170,39 @@ export async function createInvitation(
 			},
 		})
 		return invitation
+	})
+}
+
+/** Gives a pending invitation another week and returns the address to email again. */
+export async function renewInvitation(
+	organizationId: string,
+	actorUserId: string,
+	invitationId: string,
+) {
+	return db().$transaction(async (tx) => {
+		const invitation = await tx.organizationInvitation.findFirst({
+			where: { id: invitationId, organizationId, status: 'PENDING' },
+		})
+		if (!invitation) {
+			throw new MemberError('That invitation was already used or revoked.')
+		}
+		await tx.organizationInvitation.update({
+			where: { id: invitation.id },
+			data: {
+				expiresAt: new Date(Date.now() + INVITATION_TTL_DAYS * 86_400_000),
+			},
+		})
+		await tx.auditLog.create({
+			data: {
+				organizationId,
+				actorUserId,
+				action: 'member.invitation_resent',
+				resourceType: 'invitation',
+				resourceId: invitation.id,
+				metadata: { email: invitation.email },
+			},
+		})
+		return invitation.email
 	})
 }
 
@@ -485,4 +524,22 @@ export async function landingAfterSignIn(
 		where: pendingFor(identity.email),
 	})
 	return { path: waiting ? '/workspaces' : target, joined }
+}
+
+/**
+ * Where an emailed link leads once it has signed someone in. Invite links and
+ * the set-password links sent on resend come from accounts with no password
+ * yet, so they choose one first.
+ */
+export function emailLinkDestination(
+	type: string | null,
+	landing: { path: string; joined: string[] },
+) {
+	if (type === 'invite') return '/reset-password?invited=1'
+	if (type === 'recovery') {
+		return landing.joined.length
+			? '/reset-password?invited=1'
+			: '/reset-password'
+	}
+	return landing.path
 }
