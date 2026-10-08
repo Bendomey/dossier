@@ -76,19 +76,6 @@ function notFound(entity: string): never {
 	throw new Error(`${entity} not found`)
 }
 
-/* Organization */
-
-export async function getOrganization() {
-	await delay()
-	return copy(state.organization)
-}
-
-export async function updateOrganization(input: UpdateOrganizationInput) {
-	await delay()
-	Object.assign(state.organization, input)
-	return copy(state.organization)
-}
-
 /* Groups and collections */
 
 export async function listGroups() {

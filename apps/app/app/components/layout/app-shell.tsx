@@ -4,8 +4,6 @@ import { Form, Link, useNavigate } from 'react-router'
 
 import { PrimaryNav, RecentChats, SettingsNavItem } from './sidebar-nav'
 import { ThemeToggle } from './theme-toggle'
-import { useGetMembers } from '~/api/members'
-import { useGetOrganization } from '~/api/organization'
 import { Avatar } from '~/components/arc/avatar/avatar'
 import { Button } from '~/components/arc/button/button'
 import { Drawer, DrawerContent } from '~/components/arc/drawer/drawer'
@@ -13,23 +11,37 @@ import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { usePageTitle } from '~/hooks/use-page-title'
 import { plural } from '~/lib/format'
 import { useAppBase } from '~/providers/app-base-provider'
-import { useAuth } from '~/providers/auth-provider'
+import { useSession } from '~/providers/session-provider'
+
+const ROLE_LABELS: Record<MemberRole, string> = {
+	OWNER: 'Owner',
+	ADMIN: 'Admin',
+	MEMBER: 'Member',
+}
 
 function OrganizationBadge() {
-	const { data: organization } = useGetOrganization()
-	const { data: members } = useGetMembers()
-	const name = organization?.name ?? ' '
+	const { organization, user } = useSession()
 
 	return (
 		<div className="flex items-center gap-2.5 rounded-[14px] p-2">
-			<span className="bg-foreground text-background grid size-7 shrink-0 place-items-center rounded-lg text-[13px] font-medium">
-				{name.charAt(0)}
-			</span>
+			{organization.logo_url ? (
+				<img
+					src={organization.logo_url}
+					alt=""
+					className="size-7 shrink-0 rounded-lg object-cover"
+				/>
+			) : (
+				<span className="bg-foreground text-background grid size-7 shrink-0 place-items-center rounded-lg text-[13px] font-medium">
+					{organization.name.charAt(0).toUpperCase()}
+				</span>
+			)}
 			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate text-sm font-medium">{name}</span>
+				<span className="truncate text-sm font-medium">
+					{organization.name}
+				</span>
 				<span className="text-muted truncate text-xs">
-					{organization ? `${organization.plan.name} plan` : ' '}
-					{members ? ` · ${plural(members.length, 'member')}` : ''}
+					{ROLE_LABELS[user.role]} ·{' '}
+					{plural(organization.member_count, 'member')}
 				</span>
 			</span>
 		</div>
@@ -53,7 +65,7 @@ function SignOutButton({ className }: { className?: string }) {
 }
 
 function Sidebar() {
-	const { currentUser } = useAuth()
+	const { user } = useSession()
 	const navigate = useNavigate()
 	const { path, demo } = useAppBase()
 
@@ -72,15 +84,22 @@ function Sidebar() {
 			<RecentChats />
 			<SettingsNavItem />
 			<div className="border-border-subtle mt-1 flex items-center gap-2.5 border-t p-2.5">
-				<Avatar name={currentUser.name} size="sm" />
-				<span className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate text-[13px] font-medium">
-						{currentUser.name}
+				<Link
+					to={path('/settings/account')}
+					className="hover:bg-surface-muted -m-1.5 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5"
+				>
+					<Avatar
+						name={user.name}
+						src={user.avatar_url ?? undefined}
+						size="sm"
+					/>
+					<span className="flex min-w-0 flex-1 flex-col">
+						<span className="truncate text-[13px] font-medium">
+							{user.name}
+						</span>
+						<span className="text-muted truncate text-xs">{user.email}</span>
 					</span>
-					<span className="text-muted truncate text-xs">
-						{currentUser.email}
-					</span>
-				</span>
+				</Link>
 				{demo ? null : (
 					<>
 						<ThemeToggle />

@@ -1,3 +1,4 @@
 import { createContext } from 'react-router'
 
-export const userContext = createContext<{ user: User } | null>(null)
+/** The verified session, set by authMiddleware for every signed-in route. */
+export const sessionContext = createContext<Session | null>(null)

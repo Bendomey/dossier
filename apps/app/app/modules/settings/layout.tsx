@@ -1,9 +1,10 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { NavLink, useLocation } from 'react-router'
-import { useGetOrganization } from '~/api/organization'
+
 import { motionTokens } from '~/components/arc/lib/motion-tokens'
 import { cn } from '~/lib/utils'
 import { useAppBase } from '~/providers/app-base-provider'
+import { useSession } from '~/providers/session-provider'
 
 const TABS = [
 	{ to: '/settings/organization', label: 'Organization' },
@@ -11,6 +12,7 @@ const TABS = [
 	{ to: '/settings/groups', label: 'Groups' },
 	{ to: '/settings/billing', label: 'Billing' },
 	{ to: '/settings/audit-log', label: 'Audit log' },
+	{ to: '/settings/account', label: 'Your account' },
 ]
 
 export function SettingsLayoutModule({
@@ -18,7 +20,7 @@ export function SettingsLayoutModule({
 }: {
 	children: React.ReactNode
 }) {
-	const { data: organization } = useGetOrganization()
+	const { organization } = useSession()
 	const { pathname } = useLocation()
 	const reduced = useReducedMotion()
 	const { path } = useAppBase()
@@ -32,7 +34,7 @@ export function SettingsLayoutModule({
 					</h1>
 					<p className="text-secondary text-[15px]">
 						Organization, team, billing and activity for{' '}
-						{(organization?.name ?? 'your workspace').replace(/\.$/, '')}.
+						{organization.name.replace(/\.$/, '')}.
 					</p>
 				</div>
 				<nav

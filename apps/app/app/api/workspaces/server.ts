@@ -39,9 +39,9 @@ async function ensureProfile(identity: SessionIdentity) {
  * belong to one yet and need onboarding. The first active membership wins
  * until an organization switcher exists.
  */
-export async function getCurrentUser(
+export async function getSession(
 	identity: SessionIdentity,
-): Promise<User | null> {
+): Promise<Session | null> {
 	const membership = await db().organizationMember.findFirst({
 		where: {
 			userId: identity.sub,
@@ -49,7 +49,19 @@ export async function getCurrentUser(
 			organization: { status: 'ACTIVE' },
 		},
 		orderBy: { joinedAt: 'asc' },
-		include: { user: true, roles: { include: { role: true } } },
+		include: {
+			user: true,
+			organization: {
+				include: {
+					_count: { select: { members: { where: { status: 'ACTIVE' } } } },
+				},
+			},
+			roles: {
+				include: {
+					role: { include: { permissions: { include: { permission: true } } } },
+				},
+			},
+		},
 	})
 	if (!membership) return null
 
@@ -61,13 +73,34 @@ export async function getCurrentUser(
 		: roles.includes('ADMIN')
 			? 'ADMIN'
 			: 'MEMBER'
+	const permissions = [
+		...new Set(
+			membership.roles.flatMap(({ role }) =>
+				role.permissions.map(
+					({ permission }) => permission.key as PermissionKey,
+				),
+			),
+		),
+	]
+	const { organization } = membership
 
 	return {
-		id: identity.sub,
-		name: membership.user.displayName ?? displayName(identity),
-		email: identity.email ?? '',
-		role,
-		organization_id: membership.organizationId,
+		user: {
+			id: identity.sub,
+			name: membership.user.displayName ?? displayName(identity),
+			email: identity.email ?? '',
+			role,
+			organization_id: organization.id,
+			avatar_url: membership.user.avatarUrl,
+			permissions,
+		},
+		organization: {
+			id: organization.id,
+			name: organization.name,
+			slug: organization.slug,
+			logo_url: organization.logoUrl,
+			member_count: organization._count.members,
+		},
 	}
 }
 

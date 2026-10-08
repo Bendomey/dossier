@@ -372,11 +372,40 @@ export const AUDIT_EVENTS: AuditEvent[] = [
 
 const demoOwner = MEMBERS.find((member) => member.role === 'OWNER')!
 
-/** The signed-in person in the public demo embedded on the website. */
-export const DEMO_USER: User = {
-	id: demoOwner.id,
-	name: demoOwner.name,
-	email: demoOwner.email,
-	role: demoOwner.role,
-	organization_id: ORGANIZATION.id,
+/** The signed-in session in the public demo embedded on the website. */
+export const DEMO_SESSION: Session = {
+	user: {
+		id: demoOwner.id,
+		name: demoOwner.name,
+		email: demoOwner.email,
+		role: demoOwner.role,
+		organization_id: ORGANIZATION.id,
+		avatar_url: null,
+		permissions: [
+			'organization.read',
+			'organization.update',
+			'members.read',
+			'members.invite',
+			'members.remove',
+			'roles.manage',
+			'groups.manage',
+			'collections.manage',
+			'documents.read',
+			'documents.create',
+			'documents.update',
+			'documents.delete',
+			'templates.manage',
+			'documents.generate',
+			'chat.create',
+			'chat.read',
+			'audit.read',
+		],
+	},
+	organization: {
+		id: ORGANIZATION.id,
+		name: ORGANIZATION.name,
+		slug: 'asante-co',
+		logo_url: null,
+		member_count: MEMBERS.filter((member) => !member.invited).length,
+	},
 }

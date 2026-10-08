@@ -5,7 +5,6 @@ export const WEBSITE_URL = 'https://dossier.fly.dev'
 export const APP_URL = 'https://dossier-africa.fly.dev'
 
 export const QUERY_KEYS = {
-	ORGANIZATION: 'organization',
 	GROUPS: 'groups',
 	COLLECTIONS: 'collections',
 	DOCUMENTS: 'documents',

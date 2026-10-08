@@ -1,55 +1,103 @@
+import { useState } from 'react'
+import { useFetcher, useLoaderData } from 'react-router'
 import { SettingRow } from './setting-row'
-import { useGetOrganization, useUpdateOrganization } from '~/api/organization'
 import { Alert } from '~/components/arc/alert/alert'
-import { Skeleton } from '~/components/arc/skeleton/skeleton'
 import { Switch } from '~/components/arc/switch/switch'
 import { NativeSelect, TextInput } from '~/components/form-controls'
+import { useSession } from '~/providers/session-provider'
 
-const TOGGLES: Array<{
-	key: 'require_citations' | 'members_can_upload' | 'detect_document_language'
-	label: string
-	description: string
-}> = [
-	{
-		key: 'require_citations',
-		label: 'Require citations',
-		description:
-			'Answers without a source are flagged instead of shown as fact.',
-	},
-	{
-		key: 'members_can_upload',
-		label: 'Members can upload',
-		description: 'Turn off to let only admins add documents.',
-	},
-	{
-		key: 'detect_document_language',
-		label: 'Detect document language',
-		description:
-			'Store a language for every upload so people can ask in any language.',
-	},
-]
+type Field = keyof Omit<OrganizationSettings, 'id'>
+type ActionResult = { ok: boolean; error: string | null }
+
+const FETCHER_PREFIX = 'organization-setting:'
+
+type ToggleField =
+	| 'require_citations'
+	| 'members_can_upload'
+	| 'detect_document_language'
+
+const TOGGLES: Array<{ key: ToggleField; label: string; description: string }> =
+	[
+		{
+			key: 'require_citations',
+			label: 'Require citations',
+			description:
+				'Answers without a source are flagged instead of shown as fact.',
+		},
+		{
+			key: 'members_can_upload',
+			label: 'Members can upload',
+			description: 'Turn off to let only admins add documents.',
+		},
+		{
+			key: 'detect_document_language',
+			label: 'Detect document language',
+			description:
+				'Store a language for every upload so people can ask in any language.',
+		},
+	]
+
+/** One fetcher per field, so changing two settings quickly never cancels the first save. */
+function useFieldSaver(field: Field) {
+	const fetcher = useFetcher<ActionResult>({ key: `${FETCHER_PREFIX}${field}` })
+	const save = (value: string | boolean) =>
+		fetcher.submit({ [field]: String(value) }, { method: 'post' })
+	return { save, fetcher }
+}
+
+function SaveStatus({
+	fetchers,
+}: {
+	fetchers: Array<ReturnType<typeof useFetcher<ActionResult>>>
+}) {
+	const saving = fetchers.some((fetcher) => fetcher.state !== 'idle')
+	const error = fetchers.map((fetcher) => fetcher.data?.error).find(Boolean)
+	const saved = fetchers.some((fetcher) => fetcher.data?.ok)
+
+	return (
+		<>
+			<p aria-live="polite" className="text-muted h-5 self-end text-xs">
+				{saving ? 'Saving…' : saved && !error ? 'All changes saved' : ''}
+			</p>
+			{error ? (
+				<Alert tone="danger" title="Your change wasn’t saved">
+					{error}
+				</Alert>
+			) : null}
+		</>
+	)
+}
 
 export function OrganizationSettingsModule() {
-	const { data: organization, isPending } = useGetOrganization()
-	const update = useUpdateOrganization()
+	const { settings } = useLoaderData() as { settings: OrganizationSettings }
+	const { can } = useSession()
+	const editable = can('organization.update')
+	const [values, setValues] = useState(settings)
 
-	if (isPending || !organization)
-		return <Skeleton lines={6} label="Loading organization" />
+	const savers = {
+		name: useFieldSaver('name'),
+		country: useFieldSaver('country'),
+		response_language: useFieldSaver('response_language'),
+		require_citations: useFieldSaver('require_citations'),
+		members_can_upload: useFieldSaver('members_can_upload'),
+		detect_document_language: useFieldSaver('detect_document_language'),
+	}
+
+	function change<K extends Field>(field: K, value: OrganizationSettings[K]) {
+		setValues((current) => ({ ...current, [field]: value }))
+		void savers[field].save(value)
+	}
 
 	return (
 		<div className="flex flex-col">
-			<p aria-live="polite" className="text-muted h-5 self-end text-xs">
-				{update.isPending
-					? 'Saving…'
-					: update.isSuccess
-						? 'All changes saved'
-						: ''}
-			</p>
-			{update.isError ? (
-				<Alert tone="danger" title="Your change wasn’t saved">
-					{update.error.message}
+			<SaveStatus
+				fetchers={Object.values(savers).map((saver) => saver.fetcher)}
+			/>
+			{editable ? null : (
+				<Alert tone="info" title="Only the owner can change these settings">
+					Ask the owner of {settings.name} if something needs to change.
 				</Alert>
-			) : null}
+			)}
 
 			<SettingRow
 				label="Organization name"
@@ -58,10 +106,12 @@ export function OrganizationSettingsModule() {
 				{(labelId) => (
 					<TextInput
 						aria-labelledby={labelId}
-						defaultValue={organization.name}
+						defaultValue={values.name}
+						disabled={!editable}
+						maxLength={120}
 						onBlur={(event) => {
 							const name = event.target.value.trim()
-							if (name && name !== organization.name) update.mutate({ name })
+							if (name && name !== values.name) change('name', name)
 						}}
 					/>
 				)}
@@ -73,11 +123,13 @@ export function OrganizationSettingsModule() {
 				{(labelId) => (
 					<NativeSelect
 						aria-labelledby={labelId}
-						value={organization.country}
+						value={values.country}
+						disabled={!editable}
 						onChange={(event) =>
-							update.mutate({
-								country: event.target.value as Organization['country'],
-							})
+							change(
+								'country',
+								event.target.value as OrganizationSettings['country'],
+							)
 						}
 					>
 						<option value="GH">Ghana</option>
@@ -92,11 +144,13 @@ export function OrganizationSettingsModule() {
 				{(labelId) => (
 					<NativeSelect
 						aria-labelledby={labelId}
-						value={organization.response_language}
+						value={values.response_language}
+						disabled={!editable}
 						onChange={(event) =>
-							update.mutate({
-								response_language: event.target.value as ResponseLanguage,
-							})
+							change(
+								'response_language',
+								event.target.value as ResponseLanguage,
+							)
 						}
 					>
 						<option value="MATCH">Match the question</option>
@@ -116,10 +170,9 @@ export function OrganizationSettingsModule() {
 					{(labelId) => (
 						<Switch
 							aria-labelledby={labelId}
-							checked={organization[toggle.key]}
-							onCheckedChange={(checked) =>
-								update.mutate({ [toggle.key]: checked })
-							}
+							checked={values[toggle.key]}
+							disabled={!editable}
+							onCheckedChange={(checked) => change(toggle.key, checked)}
 						/>
 					)}
 				</SettingRow>

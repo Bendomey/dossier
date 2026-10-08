@@ -6,4 +6,7 @@ interface User {
 	email: string
 	role: MemberRole
 	organization_id: string
+	avatar_url: string | null
+	/** Permission keys granted by the person's roles in this organization. */
+	permissions: PermissionKey[]
 }

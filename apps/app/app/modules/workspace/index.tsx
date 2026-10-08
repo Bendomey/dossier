@@ -5,15 +5,16 @@ import { Composer } from './composer'
 import { MODE_KEYS, MODES, isChatMode } from './modes'
 import { useDemoPlay } from './use-demo-play'
 import { useCreateChat } from '~/api/chats'
-import { useGetOrganization } from '~/api/organization'
+
 import { Alert } from '~/components/arc/alert/alert'
 import { cn } from '~/lib/utils'
 import { useAppBase } from '~/providers/app-base-provider'
+import { useSession } from '~/providers/session-provider'
 
 export function WorkspaceModule() {
 	const [searchParams] = useSearchParams()
 	const navigate = useNavigate()
-	const { data: organization } = useGetOrganization()
+	const { organization } = useSession()
 	const createChat = useCreateChat()
 	const { path, demo } = useAppBase()
 
@@ -51,7 +52,7 @@ export function WorkspaceModule() {
 					</h1>
 					<p className="text-secondary text-base text-pretty">
 						Ask a question, draft a document or review a file. Dossier answers
-						from {organization?.name ?? 'your company’s'} knowledge.
+						from {organization.name} knowledge.
 					</p>
 				</div>
 

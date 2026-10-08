@@ -10,7 +10,7 @@ import {
 } from '~/components/arc/dialog/dialog'
 import { FileDropzone } from '~/components/arc/file-dropzone/file-dropzone'
 import { Select } from '~/components/arc/select/select'
-import { useAuth } from '~/providers/auth-provider'
+import { useSession } from '~/providers/session-provider'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 const INHERIT = 'inherit'
@@ -42,10 +42,10 @@ function simulateTransfer(
 }
 
 export function UploadDialog({ open, onOpenChange }: Props) {
-	const { currentUser } = useAuth()
+	const { user } = useSession()
 	const { data: collections } = useGetCollections()
 	const { data: groups } = useGetGroups()
-	const uploadDocument = useUploadDocument(currentUser.name)
+	const uploadDocument = useUploadDocument(user.name)
 
 	const [collectionId, setCollectionId] = useState<string>()
 	const [access, setAccess] = useState(INHERIT)

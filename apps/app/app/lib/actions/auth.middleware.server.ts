@@ -1,7 +1,7 @@
 import { redirect, type MiddlewareFunction } from 'react-router'
-import { userContext } from './auth.context.server'
+import { sessionContext } from './auth.context.server'
 import { getSessionClaims } from '~/api/auth/server'
-import { getCurrentUser } from '~/api/workspaces/server'
+import { getSession } from '~/api/workspaces/server'
 import { createSupabaseServerClient } from '~/lib/supabase.server'
 
 /**
@@ -31,9 +31,9 @@ export const authMiddleware: MiddlewareFunction<Response> = async (
 		return withSessionCookies(redirect(`/login?return_to=${returnTo}`))
 	}
 
-	const user = await getCurrentUser(claims)
-	if (!user) return withSessionCookies(redirect('/onboarding'))
+	const session = await getSession(claims)
+	if (!session) return withSessionCookies(redirect('/onboarding'))
 
-	context.set(userContext, { user })
+	context.set(sessionContext, session)
 	return withSessionCookies(await next())
 }

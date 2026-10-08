@@ -4,7 +4,7 @@ import { getSessionClaims } from '~/api/auth/server'
 import {
 	companyFromSignup,
 	createWorkspace,
-	getCurrentUser,
+	getSession,
 } from '~/api/workspaces/server'
 import { withHeaders } from '~/lib/actions/auth.server'
 import { pageTitle } from '~/lib/seo'
@@ -24,7 +24,7 @@ async function requireIdentity(request: Request) {
  */
 export async function loader({ request }: Route.LoaderArgs) {
 	const { claims, headers } = await requireIdentity(request)
-	if (await getCurrentUser(claims)) throw redirect('/', { headers })
+	if (await getSession(claims)) throw redirect('/', { headers })
 
 	const company = companyFromSignup(claims)
 	if (company) {
@@ -37,7 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
 	const { claims, headers } = await requireIdentity(request)
-	if (await getCurrentUser(claims)) throw redirect('/', { headers })
+	if (await getSession(claims)) throw redirect('/', { headers })
 
 	const company = String((await request.formData()).get('company') ?? '').trim()
 	if (!company)

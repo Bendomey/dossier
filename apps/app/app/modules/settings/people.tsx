@@ -1,7 +1,7 @@
 import { useState } from 'react'
+import { useGetBillingOverview } from '~/api/billing'
 import { useGetGroups } from '~/api/groups'
 import { useGetMembers, useInviteMember, useUpdateMember } from '~/api/members'
-import { useGetOrganization } from '~/api/organization'
 import { Alert } from '~/components/arc/alert/alert'
 import { Avatar } from '~/components/arc/avatar/avatar'
 import { Badge } from '~/components/arc/badge/badge'
@@ -208,7 +208,7 @@ function MemberRow({ member, groups }: { member: Member; groups: Group[] }) {
 export function PeopleSettingsModule() {
 	const { data: members, isPending } = useGetMembers()
 	const { data: groups } = useGetGroups()
-	const { data: organization } = useGetOrganization()
+	const { data: billing } = useGetBillingOverview()
 
 	if (isPending || !members || !groups)
 		return <Skeleton avatar lines={6} label="Loading people" />
@@ -239,8 +239,8 @@ export function PeopleSettingsModule() {
 			</p>
 			<InviteForm groups={groups} />
 			<p className="text-secondary text-[13px] tabular-nums">
-				{members.length} of {organization?.plan.seats ?? '–'} seats used on the{' '}
-				{organization?.plan.name ?? ''} plan
+				{members.length} of {billing?.seats.limit ?? '–'} seats used on the{' '}
+				{billing?.plan_label.split(',')[0] ?? ''} plan
 			</p>
 			<ul className="overflow-hidden rounded-[26px] border">
 				{members.map((member) => (
