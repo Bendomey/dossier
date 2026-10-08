@@ -212,19 +212,24 @@ export async function revokeInvitation(
 	invitationId: string,
 ) {
 	await db().$transaction(async (tx) => {
-		const { count } = await tx.organizationInvitation.updateMany({
+		const invitation = await tx.organizationInvitation.findFirst({
 			where: { id: invitationId, organizationId, status: 'PENDING' },
+		})
+		if (!invitation) {
+			throw new MemberError('That invitation was already used or revoked.')
+		}
+		await tx.organizationInvitation.update({
+			where: { id: invitation.id },
 			data: { status: 'REVOKED' },
 		})
-		if (!count)
-			throw new MemberError('That invitation was already used or revoked.')
 		await tx.auditLog.create({
 			data: {
 				organizationId,
 				actorUserId,
 				action: 'member.invitation_revoked',
 				resourceType: 'invitation',
-				resourceId: invitationId,
+				resourceId: invitation.id,
+				metadata: { email: invitation.email },
 			},
 		})
 	})

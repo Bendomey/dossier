@@ -14,7 +14,7 @@ interface Invoice {
 	status: 'PAID'
 }
 
-type AuditCategory = 'DOCUMENTS' | 'AI' | 'MEMBERS'
+type AuditCategory = 'DOCUMENTS' | 'AI' | 'MEMBERS' | 'WORKSPACE'
 
 interface AuditEvent {
 	id: string
@@ -23,4 +23,22 @@ interface AuditEvent {
 	action: string
 	target: string
 	category: AuditCategory
+}
+
+/** One audit log line, already worded for display (times in UTC, local time in Ghana and Liberia). */
+interface AuditEntry {
+	id: string
+	occurred_at: string
+	day_label: string
+	time_label: string
+	actor: string
+	action: string
+	target: string
+	category: AuditCategory
+}
+
+interface AuditLogPage {
+	entries: AuditEntry[]
+	/** Pass back as `before` to load the next, older page; null on the last page. */
+	next_cursor: string | null
 }

@@ -6,12 +6,12 @@ import { cn } from '~/lib/utils'
 import { useAppBase } from '~/providers/app-base-provider'
 import { useSession } from '~/providers/session-provider'
 
-const TABS = [
+const TABS: Array<{ to: string; label: string; permission?: PermissionKey }> = [
 	{ to: '/settings/organization', label: 'Organization' },
 	{ to: '/settings/people', label: 'People' },
 	{ to: '/settings/groups', label: 'Groups' },
 	{ to: '/settings/billing', label: 'Billing' },
-	{ to: '/settings/audit-log', label: 'Audit log' },
+	{ to: '/settings/audit-log', label: 'Audit log', permission: 'audit.read' },
 	{ to: '/settings/account', label: 'Your account' },
 ]
 
@@ -20,7 +20,7 @@ export function SettingsLayoutModule({
 }: {
 	children: React.ReactNode
 }) {
-	const { organization } = useSession()
+	const { organization, can } = useSession()
 	const { pathname } = useLocation()
 	const reduced = useReducedMotion()
 	const { path } = useAppBase()
@@ -41,30 +41,32 @@ export function SettingsLayoutModule({
 					aria-label="Settings"
 					className="flex gap-1 overflow-x-auto border-b"
 				>
-					{TABS.map((tab) => {
-						const active = pathname.startsWith(path(tab.to))
-						return (
-							<NavLink
-								key={tab.to}
-								to={path(tab.to)}
-								className={cn(
-									'hover:text-foreground relative flex h-[42px] shrink-0 items-center px-3 text-sm whitespace-nowrap transition-colors',
-									active ? 'text-foreground' : 'text-secondary',
-								)}
-							>
-								{tab.label}
-								{active ? (
-									<motion.span
-										layoutId="settings-tab"
-										transition={
-											reduced ? { duration: 0 } : motionTokens.spring.morph
-										}
-										className="bg-foreground absolute inset-x-2 -bottom-px h-0.5 rounded-full"
-									/>
-								) : null}
-							</NavLink>
-						)
-					})}
+					{TABS.filter((tab) => !tab.permission || can(tab.permission)).map(
+						(tab) => {
+							const active = pathname.startsWith(path(tab.to))
+							return (
+								<NavLink
+									key={tab.to}
+									to={path(tab.to)}
+									className={cn(
+										'hover:text-foreground relative flex h-[42px] shrink-0 items-center px-3 text-sm whitespace-nowrap transition-colors',
+										active ? 'text-foreground' : 'text-secondary',
+									)}
+								>
+									{tab.label}
+									{active ? (
+										<motion.span
+											layoutId="settings-tab"
+											transition={
+												reduced ? { duration: 0 } : motionTokens.spring.morph
+											}
+											className="bg-foreground absolute inset-x-2 -bottom-px h-0.5 rounded-full"
+										/>
+									) : null}
+								</NavLink>
+							)
+						},
+					)}
 				</nav>
 				<div
 					key={pathname}

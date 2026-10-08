@@ -1,49 +1,79 @@
-import { useState } from 'react'
-import { useGetAuditEvents } from '~/api/audit-events'
+import { useEffect, useState } from 'react'
+import { useFetcher, useLoaderData, useSearchParams } from 'react-router'
 import { Button } from '~/components/arc/button/button'
 import { EmptyState } from '~/components/arc/empty-state/empty-state'
 import SegmentedControl from '~/components/arc/segmented-control/segmented-control'
-import { Skeleton } from '~/components/arc/skeleton/skeleton'
+import { useAppBase } from '~/providers/app-base-provider'
 
-type Filter = 'ALL' | AuditCategory
+type Filter = 'all' | Lowercase<AuditCategory>
 
 const FILTERS: Array<{ value: Filter; label: string }> = [
-	{ value: 'ALL', label: 'All activity' },
-	{ value: 'DOCUMENTS', label: 'Documents' },
-	{ value: 'AI', label: 'AI work' },
-	{ value: 'MEMBERS', label: 'Members' },
+	{ value: 'all', label: 'All activity' },
+	{ value: 'documents', label: 'Documents' },
+	{ value: 'ai', label: 'AI work' },
+	{ value: 'members', label: 'Members' },
+	{ value: 'workspace', label: 'Workspace' },
 ]
 
-function downloadCsv(events: AuditEvent[]) {
+const isFilter = (value: string | null): value is Filter =>
+	FILTERS.some((filter) => filter.value === value)
+
+/** The demo has no server export, so it builds the file from what is on screen. */
+function downloadCsv(entries: AuditEntry[]) {
 	const escape = (value: string) => `"${value.replaceAll('"', '""')}"`
 	const rows = [
 		['Time', 'Person', 'Action', 'Target', 'Category'],
-		...events.map((event) => [
-			event.time_label,
-			event.actor,
-			event.action,
-			event.target,
-			event.category,
+		...entries.map((entry) => [
+			entry.time_label,
+			entry.actor,
+			entry.action,
+			entry.target,
+			entry.category,
 		]),
 	]
-	const blob = new Blob(
-		[rows.map((row) => row.map(escape).join(',')).join('\n')],
-		{
-			type: 'text/csv;charset=utf-8',
-		},
-	)
 	const link = document.createElement('a')
-	link.href = URL.createObjectURL(blob)
+	link.href = URL.createObjectURL(
+		new Blob([rows.map((row) => row.map(escape).join(',')).join('\n')], {
+			type: 'text/csv;charset=utf-8',
+		}),
+	)
 	link.download = 'dossier-audit-log.csv'
 	link.click()
 	URL.revokeObjectURL(link.href)
 }
 
+function groupByDay(entries: AuditEntry[]) {
+	const days: Array<{ label: string; entries: AuditEntry[] }> = []
+	for (const entry of entries) {
+		const last = days.at(-1)
+		if (last?.label === entry.day_label) last.entries.push(entry)
+		else days.push({ label: entry.day_label, entries: [entry] })
+	}
+	return days
+}
+
 export function AuditLogSettingsModule() {
-	const [filter, setFilter] = useState<Filter>('ALL')
-	const { data: events, isPending } = useGetAuditEvents(
-		filter === 'ALL' ? undefined : filter,
-	)
+	const firstPage = useLoaderData() as AuditLogPage
+	const [searchParams, setSearchParams] = useSearchParams()
+	const { path, demo } = useAppBase()
+	const older = useFetcher<AuditLogPage>()
+	const [extra, setExtra] = useState<AuditLogPage[]>([])
+
+	const category = searchParams.get('category')
+	const filter: Filter = isFilter(category) ? category : 'all'
+
+	useEffect(() => setExtra([]), [firstPage])
+	useEffect(() => {
+		if (older.state === 'idle' && older.data) {
+			const page = older.data
+			setExtra((pages) => (pages.includes(page) ? pages : [...pages, page]))
+		}
+	}, [older.state, older.data])
+
+	const entries = [firstPage, ...extra].flatMap((page) => page.entries)
+	const nextCursor = (extra.at(-1) ?? firstPage).next_cursor
+	const query = (params: Record<string, string>) =>
+		`?${new URLSearchParams(filter === 'all' ? params : { category: filter, ...params })}`
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -51,43 +81,90 @@ export function AuditLogSettingsModule() {
 				<SegmentedControl
 					label="Activity type"
 					value={filter}
-					onValueChange={(value) => setFilter(value as Filter)}
+					onValueChange={(value) =>
+						setSearchParams(value === 'all' ? {} : { category: value }, {
+							preventScrollReset: true,
+						})
+					}
 					options={FILTERS}
 				/>
 				<span className="flex-1" />
-				<Button
-					variant="secondary"
-					size="sm"
-					disabled={!events?.length}
-					onClick={() => events && downloadCsv(events)}
-				>
-					Export CSV
-				</Button>
+				{demo ? (
+					<Button
+						variant="secondary"
+						size="sm"
+						disabled={!entries.length}
+						onClick={() => downloadCsv(entries)}
+					>
+						Export CSV
+					</Button>
+				) : entries.length ? (
+					<Button
+						variant="secondary"
+						size="sm"
+						onClick={() =>
+							window.location.assign(
+								`${path('/settings/audit-log.csv')}${query({})}`,
+							)
+						}
+					>
+						Export CSV
+					</Button>
+				) : null}
 			</div>
-			{isPending ? (
-				<Skeleton lines={6} label="Loading activity" />
-			) : events?.length ? (
-				<ol className="flex flex-col">
-					{events.map((event) => (
-						<li
-							key={event.id}
-							className="border-border-subtle grid grid-cols-[96px_1fr] gap-4 border-b py-3.5"
-						>
-							<span className="text-muted text-[13px] tabular-nums">
-								{event.time_label}
-							</span>
-							<span className="text-sm leading-normal">
-								<span className="font-medium">{event.actor}</span>{' '}
-								<span className="text-secondary">{event.action}</span>{' '}
-								{event.target}
-							</span>
-						</li>
+			{entries.length ? (
+				<>
+					{groupByDay(entries).map((day) => (
+						<section key={day.label} className="flex flex-col">
+							<h2 className="text-secondary border-border-subtle border-b pb-2 text-[13px] font-medium">
+								{day.label}
+							</h2>
+							<ol className="flex flex-col">
+								{day.entries.map((entry) => (
+									<li
+										key={entry.id}
+										className="border-border-subtle grid grid-cols-[64px_1fr] gap-4 border-b py-3.5"
+									>
+										<time
+											dateTime={entry.occurred_at || undefined}
+											className="text-muted text-[13px] tabular-nums"
+										>
+											{entry.time_label}
+										</time>
+										<span className="text-sm leading-normal">
+											<span className="font-medium">{entry.actor}</span>{' '}
+											<span className="text-secondary">{entry.action}</span>
+											{entry.target ? ` ${entry.target}` : null}
+										</span>
+									</li>
+								))}
+							</ol>
+						</section>
 					))}
-				</ol>
+					{nextCursor ? (
+						<Button
+							variant="secondary"
+							className="self-center"
+							loading={older.state !== 'idle'}
+							onClick={() =>
+								older.load(
+									`${path('/settings/audit-log')}${query({ before: nextCursor })}`,
+								)
+							}
+						>
+							Load older activity
+						</Button>
+					) : null}
+					<p className="text-muted text-xs">Times are in GMT.</p>
+				</>
 			) : (
 				<EmptyState
 					title="No activity yet"
-					description="Actions in this category will show up here."
+					description={
+						filter === 'all'
+							? 'Changes to people, groups, documents and settings will show up here.'
+							: 'Nothing in this category yet.'
+					}
 				/>
 			)}
 		</div>
