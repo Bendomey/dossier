@@ -9,6 +9,13 @@ import {
 	DialogContent,
 	DialogTrigger,
 } from '~/components/arc/dialog/dialog'
+import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerTrigger,
+} from '~/components/arc/drawer/drawer'
+import { Input } from '~/components/arc/input/input'
 import { TextInput } from '~/components/form-controls'
 import { ToggleChip } from '~/components/toggle-chip'
 import { plural } from '~/lib/format'
@@ -68,30 +75,186 @@ function RenameField({ group }: { group: GroupItem }) {
 	const fetcher = useFetcher<GroupsActionResult>({
 		key: `group-rename:${group.id}`,
 	})
+	const [name, setName] = useState(group.name)
+	const saving = fetcher.state !== 'idle'
+	const trimmed = name.trim()
+	const changed = trimmed !== group.name
+
+	useEffect(() => setName(group.name), [group.name])
 
 	return (
-		<label className="text-secondary flex max-w-[360px] flex-col gap-1.5 text-[13px]">
-			Name
-			<TextInput
-				defaultValue={group.name}
-				maxLength={80}
-				className="h-10 rounded-2xl text-sm"
-				onBlur={(event) => {
-					const name = event.target.value.trim()
-					if (name && name !== group.name) {
-						void fetcher.submit(
-							{ intent: 'rename', group_id: group.id, name },
-							{ method: 'post' },
-						)
-					}
-				}}
-			/>
+		<fetcher.Form
+			method="post"
+			className="flex max-w-[480px] flex-col gap-1.5"
+			onReset={() => setName(group.name)}
+		>
+			<input type="hidden" name="intent" value="rename" />
+			<input type="hidden" name="group_id" value={group.id} />
+			<label
+				htmlFor={`group-name-${group.id}`}
+				className="text-secondary text-[13px]"
+			>
+				Name
+			</label>
+			<div className="flex flex-wrap gap-2">
+				<TextInput
+					id={`group-name-${group.id}`}
+					name="name"
+					value={name}
+					onChange={(event) => setName(event.target.value)}
+					maxLength={80}
+					required
+					className="h-10 min-w-48 flex-1 rounded-2xl text-sm"
+				/>
+				{changed ? (
+					<>
+						<Button type="reset" variant="ghost" disabled={saving}>
+							Cancel
+						</Button>
+						<Button type="submit" loading={saving} disabled={!trimmed}>
+							Save name
+						</Button>
+					</>
+				) : null}
+			</div>
 			{fetcher.state === 'idle' && fetcher.data?.error ? (
 				<span role="alert" className="text-danger text-xs">
 					{fetcher.data.error}
 				</span>
 			) : null}
-		</label>
+		</fetcher.Form>
+	)
+}
+
+/** Picks values for a form field as toggle chips, submitted as repeated hidden inputs. */
+function ChipPicker({
+	name,
+	label,
+	options,
+}: {
+	name: string
+	label: string
+	options: Array<{ id: string; label: string }>
+}) {
+	const [picked, setPicked] = useState<string[]>([])
+
+	return (
+		<fieldset className="flex flex-col gap-2">
+			<legend className="text-secondary mb-2 text-[13px]">{label}</legend>
+			<div className="flex flex-wrap gap-1.5">
+				{options.map((option) => (
+					<ToggleChip
+						key={option.id}
+						pressed={picked.includes(option.id)}
+						onPressedChange={(pressed) =>
+							setPicked((current) =>
+								pressed
+									? [...current, option.id]
+									: current.filter((id) => id !== option.id),
+							)
+						}
+					>
+						{option.label}
+					</ToggleChip>
+				))}
+			</div>
+			{picked.map((id) => (
+				<input key={id} type="hidden" name={name} value={id} />
+			))}
+		</fieldset>
+	)
+}
+
+function NewGroupSheet({
+	onCreated,
+}: {
+	onCreated: (groupId: string) => void
+}) {
+	const { members, collections } = useLoaderData() as GroupsOverview
+	const { can } = useSession()
+	const fetcher = useFetcher<GroupsActionResult>({ key: 'group-create' })
+	const [open, setOpen] = useState(false)
+	const [attempt, setAttempt] = useState(0)
+	const [submittedIn, setSubmittedIn] = useState(-1)
+	const creating = fetcher.state !== 'idle'
+	const error =
+		submittedIn === attempt && fetcher.state === 'idle'
+			? fetcher.data?.error
+			: undefined
+
+	useEffect(() => {
+		if (fetcher.state === 'idle' && fetcher.data?.group_id) {
+			setOpen(false)
+			onCreated(fetcher.data.group_id)
+		}
+	}, [fetcher.state, fetcher.data, onCreated])
+
+	return (
+		<Drawer
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next)
+				if (next) setAttempt((count) => count + 1)
+			}}
+		>
+			<DrawerTrigger asChild>
+				<Button>New group</Button>
+			</DrawerTrigger>
+			<DrawerContent
+				side="bottom"
+				title="New group"
+				description="Groups decide which collections members can see."
+			>
+				<fetcher.Form
+					key={attempt}
+					method="post"
+					onSubmit={() => setSubmittedIn(attempt)}
+					className="mx-auto flex w-full max-w-[640px] flex-col gap-5 pb-2"
+				>
+					<input type="hidden" name="intent" value="create" />
+					<Input
+						label="Name"
+						name="name"
+						placeholder="Finance team"
+						maxLength={80}
+						required
+						autoFocus
+						autoComplete="off"
+						error={error}
+					/>
+					<ChipPicker
+						name="membership_ids"
+						label="Members (optional)"
+						options={members
+							.filter((member) => member.role === 'MEMBER')
+							.map((member) => ({
+								id: member.membership_id,
+								label: member.name,
+							}))}
+					/>
+					{can('collections.manage') && collections.length ? (
+						<ChipPicker
+							name="collection_ids"
+							label="Collections it can see (optional)"
+							options={collections.map((collection) => ({
+								id: collection.id,
+								label: collection.name,
+							}))}
+						/>
+					) : null}
+					<div className="flex justify-end gap-2 pt-1">
+						<DrawerClose asChild>
+							<Button type="button" variant="secondary">
+								Cancel
+							</Button>
+						</DrawerClose>
+						<Button type="submit" loading={creating}>
+							Create group
+						</Button>
+					</div>
+				</fetcher.Form>
+			</DrawerContent>
+		</Drawer>
 	)
 }
 
@@ -278,14 +441,7 @@ function GroupRow({
 export function GroupsSettingsModule() {
 	const { groups } = useLoaderData() as GroupsOverview
 	const { can } = useSession()
-	const creation = useFetcher<GroupsActionResult>({ key: 'group-create' })
 	const [openGroupId, setOpenGroupId] = useState<string | null>(null)
-
-	useEffect(() => {
-		if (creation.state === 'idle' && creation.data?.group_id) {
-			setOpenGroupId(creation.data.group_id)
-		}
-	}, [creation.state, creation.data])
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -295,19 +451,9 @@ export function GroupsSettingsModule() {
 					collection unless it has its own access set in Knowledge.
 				</p>
 				{can('groups.manage') ? (
-					<creation.Form method="post">
-						<input type="hidden" name="intent" value="create" />
-						<Button type="submit" loading={creation.state !== 'idle'}>
-							New group
-						</Button>
-					</creation.Form>
+					<NewGroupSheet onCreated={setOpenGroupId} />
 				) : null}
 			</div>
-			{creation.state === 'idle' && creation.data?.error ? (
-				<Alert tone="danger" title="Group not created">
-					{creation.data.error}
-				</Alert>
-			) : null}
 			<ul className="overflow-hidden rounded-[26px] border">
 				{groups.map((group) => (
 					<GroupRow

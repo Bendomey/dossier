@@ -95,32 +95,66 @@ const audit = (
 		},
 	})
 
-/** Creates a group with the first free name: "New group", "New group 2", ... */
+/**
+ * Creates a group with its first members and the collections it can see.
+ * Members must be active in this workspace and collections belong to it.
+ */
 export async function createGroup(
 	organizationId: string,
 	actorUserId: string,
-	baseName = 'New group',
+	input: { name: string; membershipIds: string[]; collectionIds: string[] },
 ) {
-	return db().$transaction(async (tx) => {
-		const taken = new Set(
-			(
-				await tx.group.findMany({
-					where: { organizationId, name: { startsWith: baseName } },
-					select: { name: true },
-				})
-			).map(({ name }) => name),
-		)
-		let name = baseName
-		for (let n = 2; taken.has(name); n++) name = `${baseName} ${n}`
+	try {
+		return await db().$transaction(async (tx) => {
+			const membershipIds = [...new Set(input.membershipIds)]
+			const collectionIds = [...new Set(input.collectionIds)]
+			const [members, collections] = await Promise.all([
+				tx.organizationMember.count({
+					where: {
+						organizationId,
+						status: 'ACTIVE',
+						id: { in: membershipIds },
+					},
+				}),
+				tx.collection.count({
+					where: { organizationId, id: { in: collectionIds } },
+				}),
+			])
+			if (
+				members !== membershipIds.length ||
+				collections !== collectionIds.length
+			) {
+				throw new MemberError(
+					'Someone or a collection you picked is no longer in this workspace.',
+				)
+			}
 
-		const group = await tx.group.create({
-			data: { organizationId, name, createdById: actorUserId },
+			const group = await tx.group.create({
+				data: {
+					organizationId,
+					name: input.name,
+					createdById: actorUserId,
+					members: {
+						create: membershipIds.map((membershipId) => ({ membershipId })),
+					},
+					collections: {
+						create: collectionIds.map((collectionId) => ({ collectionId })),
+					},
+				},
+			})
+			await audit(tx, organizationId, actorUserId, 'group.created', group.id, {
+				name: input.name,
+				member_count: membershipIds.length,
+				collection_count: collectionIds.length,
+			})
+			return group
 		})
-		await audit(tx, organizationId, actorUserId, 'group.created', group.id, {
-			name,
-		})
-		return group
-	})
+	} catch (error) {
+		if (isUniqueViolation(error)) {
+			throw new MemberError(`There’s already a group called ${input.name}.`)
+		}
+		throw error
+	}
 }
 
 export async function renameGroup(

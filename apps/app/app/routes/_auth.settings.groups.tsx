@@ -18,7 +18,16 @@ const uuid = z.uuid()
 const flag = z.enum(['true', 'false']).transform((value) => value === 'true')
 
 const actionSchema = z.discriminatedUnion('intent', [
-	z.object({ intent: z.literal('create') }),
+	z.object({
+		intent: z.literal('create'),
+		name: z
+			.string()
+			.trim()
+			.min(1, 'Give the group a name.')
+			.max(80, 'Keep the name under 80 characters.'),
+		membership_ids: z.array(uuid),
+		collection_ids: z.array(uuid),
+	}),
 	z.object({
 		intent: z.literal('rename'),
 		group_id: uuid,
@@ -57,9 +66,12 @@ export async function loader({ context }: Route.LoaderArgs) {
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const session = requireSession(context)
-	const parsed = actionSchema.safeParse(
-		Object.fromEntries(await request.formData()),
-	)
+	const form = await request.formData()
+	const parsed = actionSchema.safeParse({
+		...Object.fromEntries(form),
+		membership_ids: form.getAll('membership_ids'),
+		collection_ids: form.getAll('collection_ids'),
+	})
 	if (!parsed.success) {
 		return data<GroupsActionResult>(
 			{
@@ -79,7 +91,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 		switch (input.intent) {
 			case 'create': {
 				requirePermission(session, 'groups.manage')
-				const group = await createGroup(organizationId, actorId)
+				if (input.collection_ids.length) {
+					requirePermission(session, 'collections.manage')
+				}
+				const group = await createGroup(organizationId, actorId, {
+					name: input.name,
+					membershipIds: input.membership_ids,
+					collectionIds: input.collection_ids,
+				})
 				return { ok: true, group_id: group.id }
 			}
 			case 'rename':
