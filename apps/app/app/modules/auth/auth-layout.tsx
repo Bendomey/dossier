@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Form, Link } from 'react-router'
 import { Logo } from '~/components/layout/logo'
 import { useWebsiteUrl } from '~/lib/use-website-url'
 
@@ -6,6 +6,8 @@ interface Props {
 	switchLead: string
 	switchLabel: string
 	switchTo: string
+	/** Submit the switch as a POST form (for actions such as signing out) instead of linking. */
+	switchMethod?: 'post'
 	title: string
 	description: string
 	children: React.ReactNode
@@ -15,6 +17,7 @@ export function AuthLayout({
 	switchLead,
 	switchLabel,
 	switchTo,
+	switchMethod,
 	title,
 	description,
 	children,
@@ -27,15 +30,26 @@ export function AuthLayout({
 				<a href={websiteUrl('/', 'auth_logo')} className="text-foreground">
 					<Logo />
 				</a>
-				<p className="text-secondary text-sm">
-					{switchLead}{' '}
-					<Link
-						to={switchTo}
-						className="text-foreground font-medium hover:underline"
-					>
-						{switchLabel}
-					</Link>
-				</p>
+				<div className="text-secondary flex items-center gap-1 text-sm">
+					{switchLead}
+					{switchMethod === 'post' ? (
+						<Form method="post" action={switchTo}>
+							<button
+								type="submit"
+								className="text-foreground cursor-pointer font-medium hover:underline"
+							>
+								{switchLabel}
+							</button>
+						</Form>
+					) : (
+						<Link
+							to={switchTo}
+							className="text-foreground font-medium hover:underline"
+						>
+							{switchLabel}
+						</Link>
+					)}
+				</div>
 			</header>
 			<main className="flex flex-1 items-center justify-center px-4 pt-6 pb-16">
 				<div className="animate-in fade-in slide-in-from-bottom-1.5 flex w-full max-w-[400px] flex-col gap-6 duration-350">

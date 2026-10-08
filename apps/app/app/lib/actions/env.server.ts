@@ -11,6 +11,9 @@ const environmentSchema = z.object({
 	SESSION_SECRET: z.string().min(1).default('dev-only-session-secret'),
 	/** Pooled runtime connection (Supabase transaction pooler, port 6543). */
 	DATABASE_URL: z.string().optional(),
+	SUPABASE_URL: z.string().optional(),
+	/** Supabase's public client key (sb_publishable_..., or the legacy anon key). */
+	SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
 })
 
 const environmentVariables = () => environmentSchema.parse(process.env)

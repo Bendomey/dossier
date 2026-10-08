@@ -1,28 +1,39 @@
 import { redirect, type MiddlewareFunction } from 'react-router'
 import { userContext } from './auth.context.server'
-import { deleteAuthSession, getAuthSession } from './auth.session.server'
-import { getCurrentUser } from '~/api/auth/server'
+import { getSessionClaims } from '~/api/auth/server'
+import { getCurrentUser } from '~/api/workspaces/server'
+import { createSupabaseServerClient } from '~/lib/supabase.server'
 
+/**
+ * Guards every signed-in page: verifies the Supabase session, loads the
+ * person's membership with Prisma and sends people without a workspace to
+ * onboarding. Refreshed session cookies are copied onto whatever response
+ * comes back, redirects included.
+ */
 export const authMiddleware: MiddlewareFunction<Response> = async (
 	{ request, context },
 	next,
 ) => {
-	const session = await getAuthSession(request.headers.get('Cookie'))
+	const { supabase, headers } = createSupabaseServerClient(request)
+	const withSessionCookies = (response: Response) => {
+		headers.forEach((value, key) =>
+			key.toLowerCase() === 'set-cookie'
+				? response.headers.append(key, value)
+				: response.headers.set(key, value),
+		)
+		return response
+	}
+
 	const url = new URL(request.url)
-	const loginUrl = `/login?return_to=${encodeURIComponent(`${url.pathname}${url.search}`)}`
-
-	const authToken = session.get('authToken')
-	if (!authToken) {
-		return redirect(loginUrl)
+	const claims = await getSessionClaims(supabase)
+	if (!claims) {
+		const returnTo = encodeURIComponent(`${url.pathname}${url.search}`)
+		return withSessionCookies(redirect(`/login?return_to=${returnTo}`))
 	}
 
-	const user = await getCurrentUser(authToken, session.get('userId'))
-	if (!user) {
-		return redirect(loginUrl, {
-			headers: { 'Set-Cookie': await deleteAuthSession(session) },
-		})
-	}
+	const user = await getCurrentUser(claims)
+	if (!user) return withSessionCookies(redirect('/onboarding'))
 
 	context.set(userContext, { user })
-	return next()
+	return withSessionCookies(await next())
 }

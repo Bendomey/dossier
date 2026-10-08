@@ -1,15 +1,11 @@
 import { redirect } from 'react-router'
 import type { Route } from './+types/logout'
-import {
-	deleteAuthSession,
-	getAuthSession,
-} from '~/lib/actions/auth.session.server'
+import { createSupabaseServerClient } from '~/lib/supabase.server'
 
 export async function action({ request }: Route.ActionArgs) {
-	const session = await getAuthSession(request.headers.get('Cookie'))
-	return redirect('/login', {
-		headers: { 'Set-Cookie': await deleteAuthSession(session) },
-	})
+	const { supabase, headers } = createSupabaseServerClient(request)
+	await supabase.auth.signOut()
+	throw redirect('/login', { headers })
 }
 
 export function loader() {

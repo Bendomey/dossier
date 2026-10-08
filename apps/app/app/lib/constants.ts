@@ -3,7 +3,6 @@ export const APP_NAME = 'Dossier'
 /** Temporary Fly.io hosts until the dossier domain is secured. */
 export const WEBSITE_URL = 'https://dossier.fly.dev'
 export const APP_URL = 'https://dossier-africa.fly.dev'
-export const SESSION_COOKIE = 'dossier-session'
 
 export const QUERY_KEYS = {
 	ORGANIZATION: 'organization',

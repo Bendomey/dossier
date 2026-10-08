@@ -1,17 +1,21 @@
 import {
 	Form,
+	Link,
 	useActionData,
+	useLoaderData,
 	useNavigation,
 	useSearchParams,
 } from 'react-router'
 import { AuthLayout } from './auth-layout'
 import { GoogleButton, OrDivider } from './google-button'
+import { Alert } from '~/components/arc/alert/alert'
 import { Button } from '~/components/arc/button/button'
 import { Input } from '~/components/arc/input/input'
 import { PasswordField } from '~/components/arc/password-field/password-field'
-import type { action } from '~/routes/login'
+import type { action, loader } from '~/routes/login'
 
 export function LoginModule() {
+	const { linkError } = useLoaderData<typeof loader>()
 	const result = useActionData<typeof action>()
 	const navigation = useNavigation()
 	const [searchParams] = useSearchParams()
@@ -27,6 +31,16 @@ export function LoginModule() {
 			switchLabel="Create account"
 			switchTo="/signup"
 		>
+			{linkError ? (
+				<Alert tone="danger" title="Couldn’t sign you in">
+					{linkError}
+				</Alert>
+			) : null}
+			{result?.field === 'form' ? (
+				<Alert tone="danger" title="Couldn’t sign you in">
+					{result.error}
+				</Alert>
+			) : null}
 			<GoogleButton returnTo={returnTo} />
 			<OrDivider />
 			<Form method="post" className="flex flex-col gap-3.5" noValidate>
@@ -61,12 +75,12 @@ export function LoginModule() {
 							{result.error}
 						</p>
 					) : null}
-					<a
-						href="#"
+					<Link
+						to="/forgot-password"
 						className="text-accent self-end text-[13px] hover:underline"
 					>
 						Forgot password?
-					</a>
+					</Link>
 				</div>
 				<Button
 					type="submit"

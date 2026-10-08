@@ -1,7 +1,10 @@
+import { MailCheck } from 'lucide-react'
 import { Form, useActionData, useLoaderData, useNavigation } from 'react-router'
 import { AuthLayout } from './auth-layout'
 import { GoogleButton, OrDivider } from './google-button'
+import { Alert } from '~/components/arc/alert/alert'
 import { Button } from '~/components/arc/button/button'
+import { EmptyState } from '~/components/arc/empty-state/empty-state'
 import { Input } from '~/components/arc/input/input'
 import { PasswordStrength } from '~/components/arc/password-strength/password-strength'
 import type { action, loader } from '~/routes/signup'
@@ -12,8 +15,27 @@ export function SignupModule() {
 	const navigation = useNavigation()
 	const submitting =
 		navigation.state !== 'idle' && navigation.formAction === '/signup'
+	const failure = result && 'field' in result ? result : undefined
 	const errorFor = (field: string) =>
-		result?.field === field ? result.error : undefined
+		failure?.field === field ? failure.error : undefined
+
+	if (result && 'checkEmail' in result) {
+		return (
+			<AuthLayout
+				title="Check your email"
+				description="One step left before your workspace is ready."
+				switchLead="Already confirmed?"
+				switchLabel="Sign in"
+				switchTo="/login"
+			>
+				<EmptyState
+					icon={<MailCheck size={24} />}
+					title={`We sent a link to ${result.checkEmail}`}
+					description="Open it on this device to confirm your email. Your workspace is created as soon as you do."
+				/>
+			</AuthLayout>
+		)
+	}
 
 	return (
 		<AuthLayout
@@ -23,6 +45,11 @@ export function SignupModule() {
 			switchLabel="Sign in"
 			switchTo="/login"
 		>
+			{failure?.field === 'form' ? (
+				<Alert tone="danger" title="Couldn’t create your account">
+					{failure.error}
+				</Alert>
+			) : null}
 			<GoogleButton returnTo={null} />
 			<OrDivider />
 			<Form method="post" className="flex flex-col gap-3.5" noValidate>

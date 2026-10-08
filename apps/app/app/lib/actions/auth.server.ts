@@ -1,21 +1,19 @@
-import { redirect } from 'react-router'
-import { getAuthSession, saveAuthSession } from './auth.session.server'
-import { safeRedirect } from '~/lib/misc'
+import { data, redirect } from 'react-router'
+import { getSessionClaims } from '~/api/auth/server'
+import { createSupabaseServerClient } from '~/lib/supabase.server'
 
-export async function startSession(
-	request: Request,
-	auth: { token: string; user_id: string },
-	returnTo: FormDataEntryValue | string | null,
-) {
-	const session = await getAuthSession(request.headers.get('Cookie'))
-	session.set('authToken', auth.token)
-	session.set('userId', auth.user_id)
-	return redirect(safeRedirect(returnTo), {
-		headers: { 'Set-Cookie': await saveAuthSession(session) },
-	})
+/** For the sign-in and sign-up pages: someone already signed in goes straight to the app. */
+export async function redirectIfSignedIn(request: Request) {
+	const { supabase, headers } = createSupabaseServerClient(request)
+	if (await getSessionClaims(supabase)) throw redirect('/', { headers })
+	return headers
 }
 
-export async function redirectIfSignedIn(request: Request) {
-	const session = await getAuthSession(request.headers.get('Cookie'))
-	if (session.has('authToken')) throw redirect('/')
+/** Returns data with the session cookies Supabase set during this request. */
+export function withHeaders<T>(
+	value: T,
+	headers: Headers,
+	init?: ResponseInit,
+) {
+	return data(value, { ...init, headers })
 }

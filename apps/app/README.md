@@ -10,5 +10,6 @@ yarn types:check
 yarn lint
 ```
 
-There is no backend yet. `app/lib/mock/db.ts` stands in for the API and the
-`app/api/*` modules call it; any well-formed email signs in.
+Sign-in uses Supabase Auth and the database is Supabase Postgres via Prisma (see
+the root CLAUDE.md). Most data screens still read `app/lib/mock/db.ts` until
+their modules move onto Prisma.

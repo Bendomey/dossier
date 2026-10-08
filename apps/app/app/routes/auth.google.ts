@@ -1,8 +1,27 @@
+import { redirect } from 'react-router'
 import type { Route } from './+types/auth.google'
-import { loginWithGoogle } from '~/api/auth/server'
-import { startSession } from '~/lib/actions/auth.server'
+import { startOAuth } from '~/api/auth/server'
+import { safeRedirect } from '~/lib/misc'
+import {
+	createSupabaseServerClient,
+	getRequestOrigin,
+} from '~/lib/supabase.server'
 
 export async function action({ request }: Route.ActionArgs) {
 	const form = await request.formData()
-	return startSession(request, await loginWithGoogle(), form.get('return_to'))
+	const { supabase, headers } = createSupabaseServerClient(request)
+	const next = encodeURIComponent(safeRedirect(form.get('return_to')))
+
+	const result = await startOAuth(
+		supabase,
+		'google',
+		`${getRequestOrigin(request)}/auth/callback?next=${next}`,
+	)
+	// The PKCE code verifier rides along in `headers`; the callback needs it.
+	if ('error' in result) throw redirect('/login?error=oauth', { headers })
+	throw redirect(result.url, { headers })
+}
+
+export function loader() {
+	return redirect('/login')
 }
