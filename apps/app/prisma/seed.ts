@@ -199,6 +199,7 @@ async function seed(tx: Prisma.TransactionClient) {
 			data: {
 				organizationId,
 				name: collection.name,
+				icon: collection.icon,
 				createdById: ownerId,
 				groups: {
 					create: collection.group_ids.map((groupId) => ({

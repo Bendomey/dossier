@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, Outlet, useParams, useSearchParams } from 'react-router'
 import { documentStatus, effectiveGroupIds, groupNames } from './access'
 import { CollectionIcon } from './collection-icon'
+import { StatsGrid } from './stats-grid'
 import { UploadDialog } from './upload-dialog'
 import { useGetCollections } from '~/api/collections'
 import { useGetDocuments, useGetKnowledgeStats } from '~/api/documents'
@@ -19,36 +20,11 @@ import { useAppBase } from '~/providers/app-base-provider'
 
 function Stats() {
 	const { data: stats } = useGetKnowledgeStats()
-	const items = [
-		{ label: 'Documents', value: stats?.total },
-		{ label: 'Ready for AI', value: stats?.ready, dot: 'bg-success' },
-		{ label: 'Processing', value: stats?.processing, dot: 'bg-accent' },
-		{ label: 'Approved templates', value: stats?.templates },
-	]
-
-	return (
-		<dl className="bg-border-subtle grid grid-cols-2 gap-px overflow-hidden rounded-[26px] border md:grid-cols-4">
-			{items.map((item) => (
-				<div
-					key={item.label}
-					className="bg-background flex flex-col gap-1 px-[22px] py-[18px]"
-				>
-					<dt className="text-secondary flex items-center gap-1.5 text-[13px]">
-						{item.dot ? (
-							<span className={cn('size-1.5 rounded-full', item.dot)} />
-						) : null}
-						{item.label}
-					</dt>
-					<dd className="font-heading text-[30px] font-medium tracking-[-0.02em] tabular-nums">
-						{item.value ?? '–'}
-					</dd>
-				</div>
-			))}
-		</dl>
-	)
+	return <StatsGrid stats={stats} />
 }
 
-export function KnowledgeModule() {
+/** The sample Knowledge page the public demo shows, on the in-browser mock store. */
+export function DemoKnowledgeModule() {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const { documentId } = useParams()
 	const [uploadOpen, setUploadOpen] = useState(false)

@@ -398,6 +398,8 @@ model Collection {
   name           String
   description    String?
   type           String   @default("general")
+  /// One of scale, people, building, briefcase (the icons Knowledge offers).
+  icon           String   @default("briefcase")
   createdById    String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)

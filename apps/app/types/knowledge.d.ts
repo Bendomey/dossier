@@ -1,11 +1,13 @@
 type DocumentFileType = 'PDF' | 'DOCX'
 type DocumentLanguage = 'EN' | 'FR' | 'PT'
 type DocumentStatus = 'PROCESSING' | 'READY'
+type CollectionIconName = 'scale' | 'people' | 'building' | 'briefcase'
 
 interface Collection {
 	id: string
 	name: string
-	icon: 'scale' | 'people' | 'building' | 'briefcase'
+	icon: CollectionIconName
+	description?: string | null
 	document_count: number
 	/** Groups that can see every document in the collection, unless a document overrides it. */
 	group_ids: string[]
@@ -56,4 +58,12 @@ interface UploadDocumentInput {
 	collection_id: string
 	/** null keeps the collection's access. */
 	group_ids: string[] | null
+}
+
+/** Knowledge in a real workspace: what the signed-in person can see. */
+interface KnowledgeOverview {
+	collections: Collection[]
+	documents: DossierDocument[]
+	stats: KnowledgeStats
+	groups: Group[]
 }

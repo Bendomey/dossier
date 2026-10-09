@@ -88,6 +88,27 @@ export function describeAuditEvent(
 			return { action: 'added', target: `${person} to ${text(m.group)}` }
 		case 'group.member_removed':
 			return { action: 'removed', target: `${person} from ${text(m.group)}` }
+		case 'collection.created':
+			return { action: 'created the collection', target: text(m.name) }
+		case 'collection.updated': {
+			const access = Array.isArray(m.groups)
+				? (m.groups as unknown[]).map(text).join(', ') || 'only admins'
+				: null
+			if (m.from) {
+				return {
+					action: 'renamed the collection',
+					target: `${text(m.from)} to ${text(m.name)}${access ? ` and shared it with ${access}` : ''}`,
+				}
+			}
+			return access
+				? {
+						action: 'changed who can see',
+						target: `${text(m.name)} to ${access}`,
+					}
+				: { action: 'edited the collection', target: text(m.name) }
+		}
+		case 'collection.deleted':
+			return { action: 'deleted the collection', target: text(m.name) }
 		case 'collection.access_changed':
 			return m.access === 'none'
 				? {
