@@ -51,5 +51,12 @@ Each item is meant to become its own spec.
   OCR page quota.
 - **Metrics and dashboards.** Processing duration, retries, token and OCR
   usage, failure rates per stage.
-- **Multipart uploads.** Only if files larger than 50 MB are allowed.
+- **Larger files.** Raise the 25 MB / 300-page / 50-OCR-page MVP limits once
+  benchmarks justify it (possibly a larger container instance); multipart
+  uploads only beyond ~100 MB.
+- **Per-organization OCR quotas.** Override `OCR_MONTHLY_PAGE_LIMIT` per
+  organization (plans, billing).
+- **Asynchronous job handoff.** Let the Worker hand jobs to the processor and
+  return immediately, if measurements show jobs can't reliably finish inside
+  one queue consumer invocation.
 - **CI deploys** for the indexing Worker and the Go processor.
