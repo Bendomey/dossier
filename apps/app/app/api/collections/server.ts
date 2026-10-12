@@ -1,4 +1,9 @@
+import {
+	documentIndexingState,
+	type VersionSnapshot,
+} from '~/api/documents/indexing-state'
 import { MemberError } from '~/api/members/server'
+import { uploadsEnabled } from '~/api/uploads/server'
 import type { Prisma } from '~/generated/prisma/client'
 import { db } from '~/lib/db.server'
 
@@ -17,7 +22,9 @@ const isIcon = (value: string): value is CollectionIconName =>
  * Collections the person may see: everything for owners and admins, otherwise
  * those shared with a group they belong to (Everyone included).
  */
-function visibleCollections(session: Session): Prisma.CollectionWhereInput {
+export function visibleCollections(
+	session: Session,
+): Prisma.CollectionWhereInput {
 	const { organization, user } = session
 	return user.role === 'MEMBER'
 		? {
@@ -37,12 +44,75 @@ const LANGUAGES: Record<string, DocumentLanguage> = {
 	pt: 'PT',
 }
 
+export const VERSION_WITH_LATEST_JOB = {
+	include: {
+		indexingJobs: { orderBy: { createdAt: 'desc' }, take: 1 },
+		createdBy: { select: { displayName: true } },
+	},
+} as const satisfies Prisma.DocumentVersionDefaultArgs
+
+type VersionWithJob = Prisma.DocumentVersionGetPayload<
+	typeof VERSION_WITH_LATEST_JOB
+>
+
+export function toVersionSnapshot(version: VersionWithJob): VersionSnapshot {
+	const job = version.indexingJobs[0]
+	return {
+		id: version.id,
+		versionNumber: version.versionNumber,
+		createdById: version.createdById,
+		indexed: version.indexedJobId !== null,
+		job: job
+			? {
+					status: job.status,
+					stage: job.stage,
+					progress: job.progress,
+					attempts: job.attempts,
+					errorCode: job.errorCode,
+				}
+			: null,
+	}
+}
+
+export function fileTypeOf(fileName: string): DocumentFileType {
+	const extension = fileName.split('.').pop()?.toUpperCase()
+	return extension === 'DOCX' || extension === 'TXT' || extension === 'MD'
+		? extension
+		: 'PDF'
+}
+
+/** The latest job of each live document's newest version, for counts and the failed filter. */
+async function latestJobStatuses(
+	organizationId: string,
+	collectionIds: string[],
+) {
+	if (!collectionIds.length) return []
+	return db().$queryRaw<Array<{ document_id: string; status: string }>>`
+		SELECT d.id AS document_id, lj.status::text AS status
+		FROM documents d
+		JOIN LATERAL (
+			SELECT v.id FROM document_versions v
+			WHERE v.document_id = d.id ORDER BY v.version_number DESC LIMIT 1
+		) lv ON true
+		JOIN LATERAL (
+			SELECT j.status FROM indexing_jobs j
+			WHERE j.document_version_id = lv.id ORDER BY j.created_at DESC LIMIT 1
+		) lj ON true
+		WHERE d.organization_id = ${organizationId}::uuid
+			AND d.deleted_at IS NULL AND d.status = 'ACTIVE'
+			AND d.collection_id = ANY(${collectionIds}::uuid[])`
+}
+
+const viewerCan = (session: Session, permission: PermissionKey) =>
+	session.user.permissions.includes(permission)
+
 export async function getKnowledgeOverview(
 	session: Session,
 	filters: {
 		collectionId?: string
 		templatesOnly?: boolean
 		query?: string
+		status?: 'failed'
 	} = {},
 ): Promise<KnowledgeOverview> {
 	const organizationId = session.organization.id
@@ -54,71 +124,76 @@ export async function getKnowledgeOverview(
 		collection: collectionWhere,
 	}
 
-	const [collections, documents, groups, total, ready, processing, templates] =
-		await Promise.all([
-			db().collection.findMany({
-				where: collectionWhere,
-				orderBy: { name: 'asc' },
-				include: {
-					groups: { select: { groupId: true } },
-					_count: {
-						select: {
-							documents: { where: { deletedAt: null, status: 'ACTIVE' } },
-						},
+	const [collections, groups, organization] = await Promise.all([
+		db().collection.findMany({
+			where: collectionWhere,
+			orderBy: { name: 'asc' },
+			include: {
+				groups: { select: { groupId: true } },
+				_count: {
+					select: {
+						documents: { where: { deletedAt: null, status: 'ACTIVE' } },
 					},
 				},
-			}),
-			db().document.findMany({
-				where: {
-					...liveDocument,
-					...(filters.collectionId
-						? { collectionId: filters.collectionId }
-						: {}),
-					...(filters.templatesOnly
-						? { templates: { some: { status: 'ACTIVE' } } }
-						: {}),
-					...(filters.query
-						? { name: { contains: filters.query, mode: 'insensitive' } }
-						: {}),
+			},
+		}),
+		db().group.findMany({
+			where: { organizationId },
+			orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+			select: { id: true, name: true, isSystem: true },
+		}),
+		db().organization.findUniqueOrThrow({
+			where: { id: organizationId },
+			select: { membersCanUpload: true },
+		}),
+	])
+	const latest = await latestJobStatuses(
+		organizationId,
+		collections.map((collection) => collection.id),
+	)
+	const failedIds = latest
+		.filter((row) => row.status === 'FAILED')
+		.map((row) => row.document_id)
+
+	const [documents, total, ready, templates] = await Promise.all([
+		db().document.findMany({
+			where: {
+				...liveDocument,
+				...(filters.collectionId ? { collectionId: filters.collectionId } : {}),
+				...(filters.templatesOnly
+					? { templates: { some: { status: 'ACTIVE' } } }
+					: {}),
+				...(filters.query
+					? { name: { contains: filters.query, mode: 'insensitive' } }
+					: {}),
+				...(filters.status === 'failed' ? { id: { in: failedIds } } : {}),
+			},
+			orderBy: { updatedAt: 'desc' },
+			take: DOCUMENT_LIMIT,
+			include: {
+				createdBy: true,
+				templates: { where: { status: 'ACTIVE' }, select: { id: true } },
+				currentVersion: VERSION_WITH_LATEST_JOB,
+				versions: {
+					orderBy: { versionNumber: 'desc' },
+					take: 1,
+					...VERSION_WITH_LATEST_JOB,
 				},
-				orderBy: { updatedAt: 'desc' },
-				take: DOCUMENT_LIMIT,
-				include: {
-					createdBy: true,
-					templates: { where: { status: 'ACTIVE' }, select: { id: true } },
-					currentVersion: {
-						include: {
-							indexingJobs: { orderBy: { createdAt: 'desc' }, take: 1 },
-						},
-					},
-				},
-			}),
-			db().group.findMany({
-				where: { organizationId },
-				orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
-				select: { id: true, name: true, isSystem: true },
-			}),
-			db().document.count({ where: liveDocument }),
-			db().document.count({
-				where: {
-					...liveDocument,
-					currentVersion: { indexingJobs: { some: { status: 'COMPLETED' } } },
-				},
-			}),
-			db().document.count({
-				where: {
-					...liveDocument,
-					currentVersion: {
-						indexingJobs: {
-							some: { status: { in: ['QUEUED', 'PROCESSING'] } },
-						},
-					},
-				},
-			}),
-			db().document.count({
-				where: { ...liveDocument, templates: { some: { status: 'ACTIVE' } } },
-			}),
-		])
+			},
+		}),
+		db().document.count({ where: liveDocument }),
+		db().document.count({
+			where: { ...liveDocument, currentVersionId: { not: null } },
+		}),
+		db().document.count({
+			where: { ...liveDocument, templates: { some: { status: 'ACTIVE' } } },
+		}),
+	])
+
+	const viewer = {
+		id: session.user.id,
+		canUpdate: viewerCan(session, 'documents.update'),
+	}
 
 	return {
 		collections: collections.map((collection) => ({
@@ -129,31 +204,52 @@ export async function getKnowledgeOverview(
 			document_count: collection._count.documents,
 			group_ids: collection.groups.map(({ groupId }) => groupId),
 		})),
-		documents: documents.map((document) => {
-			const version = document.currentVersion
-			const job = version?.indexingJobs[0]
-			return {
-				id: document.id,
-				name: document.name,
-				file_type: version?.mimeType.includes('word') ? 'DOCX' : 'PDF',
-				collection_id: document.collectionId,
-				language: LANGUAGES[version?.language?.toLowerCase() ?? ''] ?? 'EN',
-				status: job?.status === 'COMPLETED' ? 'READY' : 'PROCESSING',
-				progress: job?.progress ?? 0,
-				is_template: document.templates.length > 0,
-				pages: 0,
-				uploaded_by: document.createdBy?.displayName ?? '',
-				answer_count: 0,
-				updated_at: document.updatedAt.toISOString(),
-				group_ids: null,
-			}
+		documents: documents.flatMap((document) => {
+			const newest = document.versions[0]
+			if (!newest) return []
+			const shown = document.currentVersion ?? newest
+			return [
+				{
+					id: document.id,
+					name: document.name,
+					file_type: fileTypeOf(shown.fileName),
+					collection_id: document.collectionId,
+					language: LANGUAGES[shown.language?.toLowerCase() ?? ''] ?? 'EN',
+					...documentIndexingState({
+						current: document.currentVersion
+							? toVersionSnapshot(document.currentVersion)
+							: null,
+						latest: toVersionSnapshot(newest),
+						viewer,
+					}),
+					is_template: document.templates.length > 0,
+					pages: shown.pageCount ?? 0,
+					uploaded_by: document.createdBy?.displayName ?? '',
+					answer_count: 0,
+					updated_at: document.updatedAt.toISOString(),
+					group_ids: null,
+				},
+			]
 		}),
-		stats: { total, ready, processing, templates },
+		stats: {
+			total,
+			ready,
+			processing: latest.filter(
+				(row) => row.status === 'QUEUED' || row.status === 'PROCESSING',
+			).length,
+			failed: failedIds.length,
+			templates,
+		},
 		groups: groups.map((group) => ({
 			id: group.id,
 			name: group.name,
 			is_builtin: group.isSystem,
 		})),
+		uploads_enabled: uploadsEnabled(),
+		can_upload:
+			uploadsEnabled() &&
+			viewerCan(session, 'documents.create') &&
+			(session.user.role !== 'MEMBER' || organization.membersCanUpload),
 	}
 }
 

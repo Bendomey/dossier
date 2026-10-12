@@ -51,6 +51,7 @@ export function loader({ request, context }: Route.LoaderArgs) {
 		collectionId: params.get('collection') ?? undefined,
 		templatesOnly: params.get('view') === 'templates',
 		query: params.get('q')?.trim() || undefined,
+		status: params.get('status') === 'failed' ? 'failed' : undefined,
 	})
 }
 

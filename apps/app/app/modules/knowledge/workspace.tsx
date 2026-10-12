@@ -1,9 +1,26 @@
 import { FileSearch, FolderPlus, Pencil, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useFetcher, useLoaderData, useSearchParams } from 'react-router'
-import { documentStatus, effectiveGroupIds, groupNames } from './access'
+import {
+	Link,
+	Outlet,
+	useFetcher,
+	useLoaderData,
+	useRevalidator,
+	useSearchParams,
+} from 'react-router'
+import {
+	documentStatus,
+	effectiveGroupIds,
+	groupNames,
+	pendingVersionLabel,
+	stageLabel,
+} from './access'
 import { CollectionIcon } from './collection-icon'
 import { StatsGrid } from './stats-grid'
+import { UploadDialog } from './upload-dialog'
+import { uploadFile } from './upload-file'
+import { useIndexingPoll } from './use-indexing-poll'
+import { RetryButton } from './workspace-drawer'
 import { Button } from '~/components/arc/button/button'
 import {
 	Drawer,
@@ -18,6 +35,7 @@ import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { ToggleChip } from '~/components/toggle-chip'
 import { fromNow, plural } from '~/lib/format'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 import { useSession } from '~/providers/session-provider'
 import type { KnowledgeActionResult } from '~/routes/_auth.knowledge'
 
@@ -317,19 +335,54 @@ function CollectionCard({
 	)
 }
 
+function StatusLabel({
+	document,
+	status,
+}: {
+	document: DossierDocument
+	status: { label: string; tone: string }
+}) {
+	const stage =
+		document.status === 'PROCESSING' ? stageLabel(document.stage) : null
+	const label = (
+		<span className={cn('flex items-center gap-1.5', status.tone)}>
+			<span className="size-1.5 rounded-full bg-current" />
+			{status.label}
+		</span>
+	)
+	return stage ? <Tooltip content={stage}>{label}</Tooltip> : label
+}
+
 /** Knowledge for a real workspace: collections and documents from the database. */
 export function KnowledgeModule() {
-	const { collections, documents, stats, groups } =
+	const { collections, documents, stats, groups, uploads_enabled, can_upload } =
 		useLoaderData() as KnowledgeOverview
 	const { can } = useSession()
+	const { path } = useAppBase()
+	const { revalidate } = useRevalidator()
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [editing, setEditing] = useState<Editing | null>(null)
+	const [uploadOpen, setUploadOpen] = useState(false)
 	const canManage = can('collections.manage')
+	const canUpload = can_upload
 
 	const collectionId = searchParams.get('collection') ?? undefined
 	const view = searchParams.get('view') === 'templates' ? 'templates' : 'all'
 	const [query, setQuery] = useState(searchParams.get('q') ?? '')
-	const filtering = Boolean(collectionId || view === 'templates' || query)
+	const failedOnly = searchParams.get('status') === 'failed'
+	const filtering = Boolean(
+		collectionId || view === 'templates' || query || failedOnly,
+	)
+
+	useIndexingPoll(
+		documents.some(
+			(document) =>
+				document.status === 'QUEUED' ||
+				document.status === 'PROCESSING' ||
+				(document.pending_version !== null &&
+					document.pending_version.status !== 'FAILED'),
+		),
+	)
 
 	function updateParam(key: string, value?: string) {
 		setSearchParams(
@@ -373,16 +426,35 @@ export function KnowledgeModule() {
 								New collection
 							</Button>
 						) : null}
-						<Tooltip content="Uploading documents is coming soon">
-							<Button aria-disabled="true">
+						{canUpload ? (
+							<Button
+								onClick={() => setUploadOpen(true)}
+								disabled={!collections.length}
+							>
 								<Upload className="size-4" strokeWidth={1.75} />
 								Upload
 							</Button>
-						</Tooltip>
+						) : (
+							<Tooltip
+								content={
+									uploads_enabled
+										? 'You don’t have permission to upload documents'
+										: 'Uploading documents is coming soon'
+								}
+							>
+								<Button aria-disabled="true">
+									<Upload className="size-4" strokeWidth={1.75} />
+									Upload
+								</Button>
+							</Tooltip>
+						)}
 					</div>
 				</div>
 
-				<StatsGrid stats={stats} />
+				<StatsGrid
+					stats={stats}
+					failedHref={`${path('/knowledge')}?status=failed`}
+				/>
 
 				<section
 					aria-labelledby="collections-heading"
@@ -464,6 +536,19 @@ export function KnowledgeModule() {
 					</div>
 				</div>
 
+				{failedOnly ? (
+					<p className="text-secondary text-sm">
+						Showing documents that failed to index.{' '}
+						<button
+							type="button"
+							className="text-accent cursor-pointer hover:underline"
+							onClick={() => updateParam('status')}
+						>
+							Show all
+						</button>
+					</p>
+				) : null}
+
 				<div className="overflow-hidden rounded-[26px] border">
 					<div className="bg-surface-muted text-secondary desk:grid-cols-[minmax(0,2.4fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,1.1fr)_minmax(0,1fr)] grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-3 text-xs">
 						<span>Name</span>
@@ -481,7 +566,14 @@ export function KnowledgeModule() {
 										key={document.id}
 										className="border-border-subtle desk:grid-cols-[minmax(0,2.4fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,1.1fr)_minmax(0,1fr)] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t px-5 py-3 text-sm"
 									>
-										<span className="flex min-w-0 items-center gap-3">
+										<Link
+											to={{
+												pathname: path(`/knowledge/${document.id}`),
+												search: searchParams.toString(),
+											}}
+											preventScrollReset
+											className="flex min-w-0 items-center gap-3 hover:underline"
+										>
 											<span className="text-secondary grid h-10 w-[34px] shrink-0 place-items-end justify-center rounded-[7px] border pb-[5px] font-mono text-[8px]">
 												{document.file_type}
 											</span>
@@ -491,7 +583,7 @@ export function KnowledgeModule() {
 													{document.file_type} · {fromNow(document.updated_at)}
 												</span>
 											</span>
-										</span>
+										</Link>
 										<span className="text-secondary desk:block hidden text-[13px]">
 											{
 												collections.find(
@@ -508,14 +600,32 @@ export function KnowledgeModule() {
 												groups,
 											)}
 										</span>
-										<span
-											className={cn(
-												'flex items-center gap-1.5 text-[13px]',
-												status.tone,
-											)}
-										>
-											<span className="size-1.5 rounded-full bg-current" />
-											{status.label}
+										<span className="flex flex-col items-start gap-1 text-[13px]">
+											<StatusLabel document={document} status={status} />
+											{document.pending_version ? (
+												<span
+													className={cn(
+														'text-xs',
+														document.pending_version.status === 'FAILED'
+															? 'text-danger'
+															: 'text-secondary',
+													)}
+												>
+													v{document.pending_version.version_number}{' '}
+													{pendingVersionLabel(document.pending_version)}
+												</span>
+											) : null}
+											{document.status === 'FAILED' && document.error ? (
+												<span className="text-secondary desk:block hidden max-w-[220px] text-xs">
+													{document.error}
+												</span>
+											) : null}
+											{document.can_retry ? (
+												<RetryButton
+													documentId={document.id}
+													versionId={document.latest_version_id}
+												/>
+											) : null}
 										</span>
 									</li>
 								)
@@ -528,13 +638,29 @@ export function KnowledgeModule() {
 							description={
 								filtering
 									? 'Try another search or collection.'
-									: 'Uploading documents is coming soon. Collections you set up now will be ready for them.'
+									: canUpload
+										? 'Upload a PDF, DOCX, TXT or Markdown file to get started.'
+										: 'Uploading documents is coming soon. Collections you set up now will be ready for them.'
 							}
 						/>
 					)}
 				</div>
 			</div>
 
+			<UploadDialog
+				open={uploadOpen}
+				onOpenChange={setUploadOpen}
+				collections={collections}
+				upload={async (file, collectionId, options) => {
+					await uploadFile(
+						file,
+						{ url: path('/api/uploads'), collectionId },
+						options,
+					)
+				}}
+				onUploaded={() => void revalidate()}
+			/>
+			<Outlet />
 			<CollectionSheet
 				editing={editing}
 				onClose={() => setEditing(null)}

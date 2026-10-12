@@ -150,6 +150,7 @@ function advanceProcessing() {
 		)
 		if (document.progress >= 100) {
 			document.status = 'READY'
+			document.stage = null
 			document.updated_at = new Date().toISOString()
 		}
 	}
@@ -222,10 +223,20 @@ export async function getKnowledgeStats(): Promise<KnowledgeStats> {
 	await delay()
 	advanceProcessing()
 	const processing = state.documents.filter(
-		(document) => document.status === 'PROCESSING',
+		(document) =>
+			document.status === 'PROCESSING' || document.status === 'QUEUED',
+	).length
+	const failed = state.documents.filter(
+		(document) => document.status === 'FAILED',
 	).length
 	const total = UNLISTED_DOCUMENT_COUNT + state.documents.length
-	return { total, processing, ready: total - processing, templates: 14 }
+	return {
+		total,
+		processing,
+		failed,
+		ready: total - processing - failed,
+		templates: 14,
+	}
 }
 
 export async function setDocumentAccess(
@@ -246,20 +257,29 @@ export async function uploadDocument(
 ) {
 	await delay(600)
 	const extension = input.file_name.split('.').pop()?.toUpperCase()
+	const documentId = id('doc')
 	const document = {
-		id: id('doc'),
+		id: documentId,
 		name: input.file_name.replace(/\.[^.]+$/, ''),
-		file_type: (extension === 'DOCX' ? 'DOCX' : 'PDF') as DocumentFileType,
+		file_type: (['PDF', 'DOCX', 'TXT', 'MD'].includes(extension ?? '')
+			? extension
+			: 'PDF') as DocumentFileType,
 		collection_id: input.collection_id,
 		language: 'EN' as const,
 		status: 'PROCESSING' as const,
+		stage: 'EXTRACTING' as const,
 		progress: 4,
+		error: null,
+		retrying: false,
+		can_retry: false,
+		latest_version_id: `${documentId}_v1`,
+		pending_version: null,
 		is_template: false,
 		pages: Math.max(1, Math.round(input.size / 60_000)),
 		uploaded_by: uploadedBy,
 		answer_count: 0,
 		updated_at: new Date().toISOString(),
-		group_ids: input.group_ids,
+		group_ids: null,
 		processedAt: Date.now(),
 	}
 	state.documents.unshift(document)

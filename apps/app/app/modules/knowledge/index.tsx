@@ -5,8 +5,13 @@ import { documentStatus, effectiveGroupIds, groupNames } from './access'
 import { CollectionIcon } from './collection-icon'
 import { StatsGrid } from './stats-grid'
 import { UploadDialog } from './upload-dialog'
+import type { UploadProgress } from './upload-file'
 import { useGetCollections } from '~/api/collections'
-import { useGetDocuments, useGetKnowledgeStats } from '~/api/documents'
+import {
+	useGetDocuments,
+	useGetKnowledgeStats,
+	useUploadDocument,
+} from '~/api/documents'
 import { useGetGroups } from '~/api/groups'
 import { Button } from '~/components/arc/button/button'
 import { EmptyState } from '~/components/arc/empty-state/empty-state'
@@ -17,6 +22,28 @@ import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { fromNow } from '~/lib/format'
 import { cn } from '~/lib/utils'
 import { useAppBase } from '~/providers/app-base-provider'
+import { useSession } from '~/providers/session-provider'
+
+function simulateTransfer(
+	onProgress: (percent: number) => void,
+	signal: AbortSignal,
+) {
+	return new Promise<void>((resolve, reject) => {
+		let percent = 0
+		const timer = setInterval(() => {
+			percent = Math.min(100, percent + 12)
+			onProgress(percent)
+			if (percent === 100) {
+				clearInterval(timer)
+				resolve()
+			}
+		}, 120)
+		signal.addEventListener('abort', () => {
+			clearInterval(timer)
+			reject(new Error('Upload cancelled'))
+		})
+	})
+}
 
 function Stats() {
 	const { data: stats } = useGetKnowledgeStats()
@@ -29,6 +56,8 @@ export function DemoKnowledgeModule() {
 	const { documentId } = useParams()
 	const [uploadOpen, setUploadOpen] = useState(false)
 	const { path } = useAppBase()
+	const { user } = useSession()
+	const uploadDocument = useUploadDocument(user.name)
 
 	const collectionId = searchParams.get('collection') ?? undefined
 	const view = searchParams.get('view') === 'templates' ? 'templates' : 'all'
@@ -41,6 +70,19 @@ export function DemoKnowledgeModule() {
 		templates_only: view === 'templates',
 		query,
 	})
+
+	async function demoUpload(
+		file: File,
+		collectionId: string,
+		{ onProgress, signal }: UploadProgress,
+	) {
+		await simulateTransfer(onProgress, signal)
+		await uploadDocument.mutateAsync({
+			file_name: file.name,
+			size: file.size,
+			collection_id: collectionId,
+		})
+	}
 
 	function updateParam(key: string, value?: string) {
 		setSearchParams(
@@ -248,7 +290,12 @@ export function DemoKnowledgeModule() {
 				</div>
 			</div>
 
-			<UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+			<UploadDialog
+				open={uploadOpen}
+				onOpenChange={setUploadOpen}
+				collections={collections ?? []}
+				upload={demoUpload}
+			/>
 			<Outlet />
 		</div>
 	)

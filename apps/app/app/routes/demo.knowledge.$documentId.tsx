@@ -1,1 +1,3 @@
-export { default } from './_auth.knowledge.$documentId'
+import { DocumentDrawerModule } from '~/modules'
+
+export default DocumentDrawerModule

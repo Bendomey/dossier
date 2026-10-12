@@ -36,6 +36,13 @@ const SYSTEM_ROLE_NAMES = {
 	MEMBER: 'Member',
 } as const
 
+const JOB_STATUS = {
+	READY: 'COMPLETED',
+	PROCESSING: 'PROCESSING',
+	QUEUED: 'QUEUED',
+	FAILED: 'FAILED',
+} as const
+
 /** Sample documents use these types; the mock data does not carry one. */
 const DOCUMENT_TYPES: Record<
 	string,
@@ -230,24 +237,24 @@ async function seed(tx: Prisma.TransactionClient) {
 				organizationId,
 				documentId: document.id,
 				versionNumber: 1,
+				uploadId: randomUUID(),
 				fileKey: `${organizationId}/documents/${document.id}/v1.${extension}`,
 				fileName: `${sample.name}.${extension}`,
 				mimeType: mimeType(sample.file_type),
 				fileSize: BigInt(sample.pages * 60_000),
+				pageCount: sample.pages,
 				language: sample.language.toLowerCase(),
 				createdById: uploaderId,
 				createdAt: new Date(sample.updated_at),
 			},
 		})
-		await tx.document.update({
-			where: { id: document.id },
-			data: { currentVersionId: version.id },
-		})
-		await tx.indexingJob.create({
+		const job = await tx.indexingJob.create({
 			data: {
 				organizationId,
 				documentVersionId: version.id,
-				status: sample.status === 'READY' ? 'COMPLETED' : 'PROCESSING',
+				status: JOB_STATUS[sample.status],
+				stage: sample.status === 'READY' ? null : 'EMBEDDING',
+				errorCode: sample.status === 'FAILED' ? 'ENCRYPTED' : null,
 				progress: sample.progress,
 				attempts: 1,
 				startedAt: new Date(sample.updated_at),
@@ -255,6 +262,16 @@ async function seed(tx: Prisma.TransactionClient) {
 					sample.status === 'READY' ? new Date(sample.updated_at) : null,
 			},
 		})
+		if (sample.status === 'READY') {
+			await tx.documentVersion.update({
+				where: { id: version.id },
+				data: { indexedJobId: job.id },
+			})
+			await tx.document.update({
+				where: { id: document.id },
+				data: { currentVersionId: version.id },
+			})
+		}
 		if (sample.is_template) {
 			await tx.documentTemplate.create({
 				data: {

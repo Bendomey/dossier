@@ -19,10 +19,41 @@ export function effectiveGroupIds(
 }
 
 export function documentStatus(document: DossierDocument) {
-	return document.status === 'READY'
-		? {
+	switch (document.status) {
+		case 'READY':
+			return {
 				label: document.is_template ? 'Approved template' : 'Ready for AI',
 				tone: 'text-success',
 			}
-		: { label: `Indexing ${document.progress}%`, tone: 'text-accent' }
+		case 'PROCESSING':
+			return { label: `Indexing ${document.progress}%`, tone: 'text-accent' }
+		case 'QUEUED':
+			return {
+				label: document.retrying ? 'Retrying…' : 'Queued',
+				tone: 'text-secondary',
+			}
+		case 'FAILED':
+			return { label: 'Failed', tone: 'text-danger' }
+	}
+}
+
+const STAGE_LABELS: Record<IndexingStage, string> = {
+	EXTRACTING: 'Reading pages',
+	CHUNKING: 'Splitting into clauses',
+	EMBEDDING: 'Indexing',
+	ACTIVATING: 'Finishing',
+}
+
+export const stageLabel = (stage: IndexingStage | null) =>
+	stage ? STAGE_LABELS[stage] : null
+
+export function pendingVersionLabel(pending: PendingVersion) {
+	switch (pending.status) {
+		case 'FAILED':
+			return 'failed'
+		case 'QUEUED':
+			return 'queued'
+		case 'PROCESSING':
+			return `processing ${pending.progress}%`
+	}
 }

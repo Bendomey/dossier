@@ -1,111 +1,111 @@
-import { useState } from 'react'
-import { useGetCollections } from '~/api/collections'
-import { useUploadDocument } from '~/api/documents'
-import { useGetGroups } from '~/api/groups'
+import { useRef, useState } from 'react'
+import type { UploadProgress } from './upload-file'
+import { useUploadGuard } from './use-upload-guard'
+import { MAX_UPLOAD_BYTES } from '~/api/uploads/validation'
 import { Button } from '~/components/arc/button/button'
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-} from '~/components/arc/dialog/dialog'
+import { Dialog, DialogContent } from '~/components/arc/dialog/dialog'
 import { FileDropzone } from '~/components/arc/file-dropzone/file-dropzone'
 import { Select } from '~/components/arc/select/select'
-import { useSession } from '~/providers/session-provider'
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024
-const INHERIT = 'inherit'
 
 interface Props {
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	collections: Array<{ id: string; name: string }>
+	upload: (
+		file: File,
+		collectionId: string,
+		options: UploadProgress,
+	) => Promise<void>
+	/** Uploading a new version: the document and its collection are fixed. */
+	fixedDocument?: { id: string; name: string; collectionId: string }
+	onUploaded?: () => void
 }
 
-function simulateTransfer(
-	onProgress: (percent: number) => void,
-	signal: AbortSignal,
-) {
-	return new Promise<void>((resolve, reject) => {
-		let percent = 0
-		const timer = setInterval(() => {
-			percent = Math.min(100, percent + 12)
-			onProgress(percent)
-			if (percent === 100) {
-				clearInterval(timer)
-				resolve()
-			}
-		}, 120)
-		signal.addEventListener('abort', () => {
-			clearInterval(timer)
-			reject(new Error('Upload cancelled'))
-		})
-	})
-}
-
-export function UploadDialog({ open, onOpenChange }: Props) {
-	const { user } = useSession()
-	const { data: collections } = useGetCollections()
-	const { data: groups } = useGetGroups()
-	const uploadDocument = useUploadDocument(user.name)
-
+export function UploadDialog({
+	open,
+	onOpenChange,
+	collections,
+	upload,
+	fixedDocument,
+	onUploaded,
+}: Props) {
 	const [collectionId, setCollectionId] = useState<string>()
-	const [access, setAccess] = useState(INHERIT)
-	const selectedCollection = collectionId ?? collections?.[0]?.id
+	const [uploading, setUploading] = useState(0)
+	const controllers = useRef(new Set<AbortController>())
+	const selectedCollection =
+		fixedDocument?.collectionId ?? collectionId ?? collections[0]?.id
+
+	const { confirmLeave, requestClose } = useUploadGuard(uploading, () => {
+		for (const controller of controllers.current) controller.abort()
+	})
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent
-				title="Upload documents"
-				description="PDF, DOCX and scanned files up to 50 MB each."
+		<>
+			<Dialog
+				open={open}
+				onOpenChange={(next) =>
+					next ? onOpenChange(true) : requestClose(() => onOpenChange(false))
+				}
 			>
-				<div className="flex flex-col gap-[18px]">
-					<FileDropzone
-						accept=".pdf,.docx,image/*"
-						maxSize={MAX_FILE_SIZE}
-						maxFiles={10}
-						label="Drop files here or choose files"
-						description="Dossier detects the language and splits each file into clauses."
-						onUpload={async (item, { onProgress, signal }) => {
-							await simulateTransfer(onProgress, signal)
-							await uploadDocument.mutateAsync({
-								file_name: item.name,
-								size: item.size,
-								collection_id: selectedCollection ?? '',
-								group_ids: access === INHERIT ? null : [access],
-							})
-						}}
-					/>
-					<div className="grid grid-cols-2 gap-3">
-						<Select
-							label="Collection"
-							value={selectedCollection}
-							onValueChange={setCollectionId}
-							options={
-								collections?.map((collection) => ({
+				<DialogContent
+					title={
+						fixedDocument
+							? `New version of ${fixedDocument.name}`
+							: 'Upload documents'
+					}
+					description="PDF, DOCX, TXT and Markdown up to 25 MB each."
+				>
+					<div className="flex flex-col gap-[18px]">
+						<FileDropzone
+							accept=".pdf,.docx,.txt,.md"
+							maxSize={MAX_UPLOAD_BYTES}
+							maxFiles={fixedDocument ? 1 : 10}
+							multiple={!fixedDocument}
+							label="Drop files here or choose files"
+							description="Dossier reads each file and splits it into clauses it can cite."
+							onUpload={async (item, { onProgress, signal }) => {
+								if (!item.file || !selectedCollection) {
+									throw new Error('Choose a collection first.')
+								}
+								const controller = new AbortController()
+								if (signal.aborted) controller.abort()
+								signal.addEventListener('abort', () => controller.abort(), {
+									once: true,
+								})
+								controllers.current.add(controller)
+								setUploading((count) => count + 1)
+								try {
+									await upload(item.file, selectedCollection, {
+										onProgress,
+										signal: controller.signal,
+									})
+									onUploaded?.()
+								} finally {
+									controllers.current.delete(controller)
+									setUploading((count) => count - 1)
+								}
+							}}
+						/>
+						{fixedDocument ? null : (
+							<Select
+								label="Collection"
+								value={selectedCollection}
+								onValueChange={setCollectionId}
+								options={collections.map((collection) => ({
 									value: collection.id,
 									label: collection.name,
-								})) ?? []
-							}
-						/>
-						<Select
-							label="Access"
-							value={access}
-							onValueChange={setAccess}
-							options={[
-								{ value: INHERIT, label: 'Same as collection' },
-								...(groups?.map((group) => ({
-									value: group.id,
-									label: group.name,
-								})) ?? []),
-							]}
-						/>
+								}))}
+							/>
+						)}
+						<div className="flex justify-end">
+							<Button onClick={() => requestClose(() => onOpenChange(false))}>
+								Done
+							</Button>
+						</div>
 					</div>
-					<div className="flex justify-end">
-						<DialogClose asChild>
-							<Button>Done</Button>
-						</DialogClose>
-					</div>
-				</div>
-			</DialogContent>
-		</Dialog>
+				</DialogContent>
+			</Dialog>
+			{confirmLeave}
+		</>
 	)
 }

@@ -1,6 +1,13 @@
+import { Link } from 'react-router'
 import { cn } from '~/lib/utils'
 
-export function StatsGrid({ stats }: { stats?: KnowledgeStats }) {
+export function StatsGrid({
+	stats,
+	failedHref,
+}: {
+	stats?: KnowledgeStats
+	failedHref?: string
+}) {
 	const items = [
 		{ label: 'Documents', value: stats?.total },
 		{ label: 'Ready for AI', value: stats?.ready, dot: 'bg-success' },
@@ -21,8 +28,22 @@ export function StatsGrid({ stats }: { stats?: KnowledgeStats }) {
 						) : null}
 						{item.label}
 					</dt>
-					<dd className="font-heading text-[30px] font-medium tracking-[-0.02em] tabular-nums">
+					<dd className="font-heading flex items-baseline gap-2 text-[30px] font-medium tracking-[-0.02em] tabular-nums">
 						{item.value ?? '–'}
+						{item.label === 'Processing' && stats?.failed ? (
+							failedHref ? (
+								<Link
+									to={failedHref}
+									className="text-danger font-sans text-[13px] font-normal tracking-normal hover:underline"
+								>
+									· {stats.failed} failed
+								</Link>
+							) : (
+								<span className="text-danger font-sans text-[13px] font-normal tracking-normal">
+									· {stats.failed} failed
+								</span>
+							)
+						) : null}
 					</dd>
 				</div>
 			))}

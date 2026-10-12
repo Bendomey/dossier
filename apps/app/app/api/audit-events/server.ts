@@ -121,6 +121,19 @@ export function describeAuditEvent(
 					}
 		case 'document.uploaded':
 			return { action: 'uploaded', target: text(m.target) }
+		case 'document.version_uploaded':
+			return {
+				action: 'uploaded a new version of',
+				target: m.version
+					? `${text(m.target)} (v${String(m.version)})`
+					: text(m.target),
+			}
+		case 'document.indexing_retried':
+			return { action: 'retried indexing', target: text(m.target) }
+		case 'document.indexing_failed':
+			return { action: 'could not index', target: text(m.target) }
+		case 'document.removed':
+			return { action: 'removed', target: text(m.target) }
 		case 'document.permission_changed':
 			return { action: 'changed access on', target: text(m.target) }
 		case 'ai.contract_reviewed':

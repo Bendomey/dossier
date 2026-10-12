@@ -60,3 +60,20 @@ Each item is meant to become its own spec.
   return immediately, if measurements show jobs can't reliably finish inside
   one queue consumer invocation.
 - **CI deploys** for the indexing Worker and the Go processor.
+
+## Carry into Plan 2 (Go processor), from the Plan 1 reviews
+
+- Always set `document_chunks.indexing_job_id` (its unique key doesn't guard NULLs); add NOT NULL once the processor is live.
+- When a job finds its document removed or a newer job for the version, end it `FAILED` with `SUPERSEDED` (Remove only soft-deletes).
+- A Retry is a new job row: delete the failed job's chunks, or reuse them when resuming embedding.
+- Ensure `document_versions.indexed_job_id` points at a job of the same version (the FK doesn't enforce it).
+- Grants to revisit: `UPDATE` on `ai_runs` if runs are inserted RUNNING and updated later; `SELECT` for any `INSERT … RETURNING`; `indexing_worker` has no `SELECT` on `documents` (the `document.indexing_failed` audit needs a `target` name — use `document_versions.file_name` or grant `SELECT (name)`); worker can't set `error_message`.
+- Read `file_key` verbatim; every environment uses the same bucket and real keys, so the processor's artifacts go under `org/{org}/versions/{id}/…` everywhere.
+- Until it runs on Cloudflare, the processor is called directly by the app in development (`POST http://localhost:8080/jobs` with the queue message body).
+- Before the first Supabase deploy of the `document_ingestion` migration, confirm the CI migrate user (`DIRECT_URL`) has CREATEROLE.
+
+## Small polish left from Plan 1
+
+- Overview counts: `latestJobStatuses` returns a row per live document (aggregate in SQL later); `total`/`ready` can include documents with no version.
+- `cleanFileName` can split a surrogate pair when truncating.
+- The disabled Upload button (no collections yet) has no explanation.

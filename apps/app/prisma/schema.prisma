@@ -85,6 +85,19 @@ enum IndexingStatus {
   FAILED
 }
 
+enum IndexingStage {
+  EXTRACTING
+  CHUNKING
+  EMBEDDING
+  ACTIVATING
+}
+
+enum IndexingTrigger {
+  UPLOAD
+  RETRY
+  REINDEX
+}
+
 enum ChatStatus {
   ACTIVE
   ARCHIVED
@@ -111,6 +124,7 @@ enum AiOperation {
   CONTRACT_REVIEW
   COMPARISON
   EMBEDDING
+  OCR
 }
 
 enum AiRunStatus {
@@ -174,6 +188,7 @@ model Profile {
   collectionsCreated        Collection[]
   documentsCreated          Document[]
   documentVersionsCreated   DocumentVersion[]
+  indexingJobsCreated       IndexingJob[]              @relation("IndexingJobCreatedBy")
   templatesCreated          DocumentTemplate[]         @relation("TemplateCreatedBy")
   templatesApproved         DocumentTemplate[]         @relation("TemplateApprovedBy")
   chatsCreated              Chat[]
@@ -232,6 +247,8 @@ model Organization {
   reviews                   DocumentReview[]
   reviewFindings            ReviewFinding[]
   auditLogs                 AuditLog[]
+  outboxEvents              OutboxEvent[]
+  ocrUsage                  OcrUsage[]
 
   @@map("organizations")
 }
@@ -491,6 +508,11 @@ model DocumentVersion {
   fileSize       BigInt   @map("file_size")
   checksum       String?
   language       String?
+  /// The upload that created this version; makes completing an upload idempotent.
+  uploadId       String?  @unique @map("upload_id") @db.Uuid
+  /// The indexing job whose chunks are live for this version.
+  indexedJobId   String?  @map("indexed_job_id") @db.Uuid
+  pageCount      Int?     @map("page_count")
   createdById    String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -498,7 +520,8 @@ model DocumentVersion {
   document     Document          @relation("DocumentVersions", fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)
   currentOf    Document?         @relation("CurrentVersion")
   createdBy    Profile?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  indexingJobs IndexingJob[]
+  indexingJobs IndexingJob[]     @relation("VersionJobs")
+  indexedJob   IndexingJob?      @relation("IndexedJob", fields: [organizationId, indexedJobId], references: [organizationId, id], onDelete: NoAction)
   chunks       DocumentChunk[]
   citations    MessageCitation[]
 
@@ -534,24 +557,42 @@ model DocumentTemplate {
 
 // ─── Indexing ───────────────────────────────────────────────────────────────
 
+/// One indexing attempt of one version. A Retry or re-index inserts a new row; a duplicate queue delivery reuses it.
 model IndexingJob {
-  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId    String         @map("organization_id") @db.Uuid
-  documentVersionId String         @map("document_version_id") @db.Uuid
-  status            IndexingStatus @default(QUEUED)
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String          @map("organization_id") @db.Uuid
+  documentVersionId   String          @map("document_version_id") @db.Uuid
+  status              IndexingStatus  @default(QUEUED)
+  stage               IndexingStage?
   /// 0-100, reported by the processor for the upload progress UI.
-  progress          Int            @default(0)
-  attempts          Int            @default(0)
-  errorMessage      String?        @map("error_message")
-  startedAt         DateTime?      @map("started_at") @db.Timestamptz(3)
-  completedAt       DateTime?      @map("completed_at") @db.Timestamptz(3)
-  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  progress            Int             @default(0)
+  /// Incremented by every claim; the processor's writes are fenced on it.
+  attempts            Int             @default(0)
+  errorStage          IndexingStage?  @map("error_stage")
+  errorCode           String?         @map("error_code")
+  errorMessage        String?         @map("error_message")
+  heartbeatAt         DateTime?       @map("heartbeat_at") @db.Timestamptz(3)
+  pipelineVersion     String?         @map("pipeline_version")
+  embeddingModel      String?         @map("embedding_model")
+  ocrModel            String?         @map("ocr_model")
+  expectedChunkCount  Int?            @map("expected_chunk_count")
+  completedChunkCount Int             @default(0) @map("completed_chunk_count")
+  ocrPageCount        Int             @default(0) @map("ocr_page_count")
+  triggeredBy         IndexingTrigger @default(UPLOAD) @map("triggered_by")
+  createdById         String?         @map("created_by") @db.Uuid
+  startedAt           DateTime?       @map("started_at") @db.Timestamptz(3)
+  completedAt         DateTime?       @map("completed_at") @db.Timestamptz(3)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  documentVersion DocumentVersion @relation(fields: [organizationId, documentVersionId], references: [organizationId, id], onDelete: Cascade)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentVersion DocumentVersion   @relation("VersionJobs", fields: [organizationId, documentVersionId], references: [organizationId, id], onDelete: Cascade)
+  createdBy       Profile?          @relation("IndexingJobCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  indexedVersions DocumentVersion[] @relation("IndexedJob")
+  chunks          DocumentChunk[]
 
+  @@unique([organizationId, id])
   @@index([organizationId, status])
-  @@index([documentVersionId])
+  @@index([documentVersionId, createdAt(sort: Desc)])
   @@map("indexing_jobs")
 }
 
@@ -561,10 +602,14 @@ model DocumentChunk {
   /// Denormalized so retrieval can filter by permitted documents without joining versions.
   documentId        String                       @map("document_id") @db.Uuid
   documentVersionId String                       @map("document_version_id") @db.Uuid
+  indexingJobId     String?                      @map("indexing_job_id") @db.Uuid
   chunkIndex        Int                          @map("chunk_index")
   content           String
   contentHash       String                       @map("content_hash")
   pageNumber        Int?                         @map("page_number")
+  pageEnd           Int?                         @map("page_end")
+  sectionNumber     String?                      @map("section_number")
+  language          String?
   sectionTitle      String?                      @map("section_title")
   tokenCount        Int                          @map("token_count")
   /// Page, section, heading, paragraph and table positions used by citations.
@@ -575,12 +620,45 @@ model DocumentChunk {
   organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   document        Document          @relation(fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)
   documentVersion DocumentVersion   @relation(fields: [organizationId, documentVersionId], references: [organizationId, id], onDelete: Cascade)
+  indexingJob     IndexingJob?      @relation(fields: [organizationId, indexingJobId], references: [organizationId, id], onDelete: Cascade)
   citations       MessageCitation[]
 
-  @@unique([documentVersionId, chunkIndex])
+  @@unique([indexingJobId, chunkIndex])
   @@unique([organizationId, id])
   @@index([organizationId, documentId])
   @@map("document_chunks")
+}
+
+/// Indexing requests written in the same transaction as their job, then published to Cloudflare Queues.
+model OutboxEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  eventType      String    @map("event_type")
+  /// The indexing job the event asks to process.
+  aggregateId    String    @map("aggregate_id") @db.Uuid
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(3)
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, aggregateId])
+  @@map("outbox_events")
+}
+
+/// Scanned pages reserved for OCR per organization and month; reserved atomically by the processor.
+model OcrUsage {
+  organizationId String   @map("organization_id") @db.Uuid
+  period         DateTime @db.Date
+  pagesReserved  Int      @default(0) @map("pages_reserved")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, period])
+  @@map("ocr_usage")
 }
 
 // ─── AI workspace ───────────────────────────────────────────────────────────
