@@ -1,0 +1,46 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "indexing-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"observability": { "enabled": true },
+	"containers": [
+		{
+			"class_name": "Processor",
+			"image": "../document-processor/Dockerfile",
+			"instance_type": "basic",
+			"max_instances": 2
+		}
+	],
+	"durable_objects": {
+		"bindings": [{ "name": "PROCESSOR", "class_name": "Processor" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Processor"] }],
+	"queues": {
+		"producers": [{ "binding": "INDEXING_QUEUE", "queue": "indexing" }],
+		"consumers": [
+			{
+				"queue": "indexing",
+				"max_batch_size": 1,
+				"max_retries": 10,
+				"max_concurrency": 2,
+				"dead_letter_queue": "indexing-dlq"
+			},
+			{ "queue": "indexing-dlq", "max_batch_size": 10, "max_retries": 20, "retry_delay": 300 }
+		]
+	},
+	// Created in the launch runbook: `wrangler hyperdrive create`, connecting as indexing_worker.
+	"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+	"r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "dossier-documents" }],
+	"triggers": { "crons": ["*/5 * * * *", "0 3 * * *"] },
+	"vars": {
+		"R2_BUCKET": "dossier-documents",
+		"EMBEDDING_MODEL": "gemini-embedding-001",
+		"OCR_MODEL": "gemini-2.5-flash-lite",
+		"OCR_MONTHLY_PAGE_LIMIT": "500",
+		"PIPELINE_VERSION": "1",
+		"ORPHAN_SWEEP_DELETE": "false"
+	}
+}

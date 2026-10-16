@@ -75,3 +75,9 @@ make inspect FILE=scan.pdf OCR_FROM=dir   # uses dir/page-<n>.md instead, no net
 |---|---|---|---|
 | Not measured yet — run `make docker && make bench` | | | |
 | Scanned pages | | | |
+
+## Production
+
+Runs as a Cloudflare Container behind `services/indexing-worker`; the Worker
+passes the environment from its secrets and vars. On `SIGTERM` the processor
+stops taking jobs and waits up to 13 minutes for the running one.

@@ -30,5 +30,4 @@ Cloudflare dashboard → R2 → bucket → Settings → CORS policy:
 R2 → Manage API tokens → Create token with **Object Read & Write** on this
 bucket only. Put the access key, secret and account ID in `.envrc` locally and
 in `fly secrets set R2_ACCOUNT_ID=… R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=… R2_BUCKET=dossier-documents`
-for production. Keep `UPLOADS_ENABLED=false` in production until the
-indexing processor is live.
+for production. Turn `UPLOADS_ENABLED` on in production only after docs/runbooks/indexing-launch.md step 8.

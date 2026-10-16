@@ -74,7 +74,9 @@ func main() {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 		<-signals
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// A second Ctrl-C kills the process instead of waiting for the job.
+		signal.Stop(signals)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.JobTimeout+time.Minute)
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()

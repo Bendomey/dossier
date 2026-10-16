@@ -59,7 +59,14 @@ Each item is meant to become its own spec.
 - **Asynchronous job handoff.** Let the Worker hand jobs to the processor and
   return immediately, if measurements show jobs can't reliably finish inside
   one queue consumer invocation.
-- **CI deploys** for the indexing Worker and the Go processor.
+- **Faster OCR.** Pages are rendered and sent one at a time; if the benchmark
+  shows 50 scanned pages plus embedding near the 12-minute deadline, send 2–3
+  pages concurrently.
+- **Release unused OCR reservations.** All uncached pages are reserved up
+  front, so pages that end up never sent (Gemini failure, timeout, lost claim,
+  render failure, oversized image) stay counted for the month.
+- **CI deploys** for the indexing Worker and the Go processor (today: `yarn deploy` by hand).
+- **Remove direct dispatch** (`INDEXING_DISPATCH=direct` and its retry loop in `api/indexing/server.ts`) if local development moves to the queue.
 
 ## Carry into Plan 2 (Go processor), from the Plan 1 reviews
 

@@ -7,6 +7,7 @@
 yarn.lock
 !apps/website/yarn.lock
 !apps/app/yarn.lock
+!services/indexing-worker/yarn.lock
 node_modules
 
 .idea
