@@ -1,0 +1,6 @@
+.env*
+!.env.example
+.envrc
+bin/
+*.pdf
+*.docx

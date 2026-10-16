@@ -20,6 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 /apps
 ├── website/             Public marketing website (port 3000)
 └── app/                 The product: workspace, knowledge, settings (port 3001)
+/services
+└── document-processor/  Go service that extracts, chunks and embeds uploaded documents (port 8080)
 ```
 
 ## Common Commands
@@ -120,6 +122,10 @@ types/                Global domain types (*.d.ts)
 - Theme: `theme` cookie (`light` | `dark` | `system`), `data-theme` on `<html>`
 - Public demo: `/demo/*` re-exports the real page routes inside `routes/demo.tsx` (sample owner, no auth, light theme). The website embeds it in its product demo; only the website may frame it (`frame-ancestors` in `entry.server.tsx`). `?play=ask|review|draft|compare` auto-types and sends that task's first example
 - Never hard-code in-app paths: use `useAppBase().path('/knowledge')` so links work both in the app and under `/demo`
+
+## Document processor (services/document-processor)
+
+Go service (`net/http`, `pgx`, AWS S3 SDK for R2, Poppler CLIs, Gemini REST). Gemini calls go to `GEMINI_BASE_URL`: Google directly in development, Cloudflare AI Gateway (`dossier`, payload logging and caching off, `AI_GATEWAY_TOKEN`) in production. `POST /jobs` takes the indexing message, claims the job, extracts, chunks, embeds and activates the version; one job at a time, 12-minute deadline, heartbeat every 30 s, every write fenced on the job's `attempts`. It connects as the `indexing_processor` role through Supabase's session pooler and only uses that role's grants. Run with `make run` (needs `.env`, see `.env.example`); look at extraction with `make inspect FILE=…` (`CHUNKS=1` for chunks); `make check` is the verification (no automated tests). A processor killed mid-job leaves the job Processing: recover it with `make enqueue JOB=<id>` once 2 minutes have passed. Plan 3 adds OCR, Plan 4 the Cloudflare Worker and Container.
 
 ## Database (apps/app)
 

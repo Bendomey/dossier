@@ -74,6 +74,54 @@ async function publishToQueue(
 	if (!response.ok) throw new Error(`Queues API ${response.status}`)
 }
 
+const BUSY_RETRY_DELAY_MS = 30_000
+const BUSY_RETRY_LIMIT = 20
+const FAILURE_RETRY_DELAYS_MS = [30_000, 120_000, 600_000, 600_000]
+
+// Stands in for the queue's redelivery until the Worker exists.
+async function deliverDirect(
+	url: string,
+	message: IndexRequestedMessage,
+	fetchImpl: typeof fetch,
+) {
+	let busyRetries = 0
+	let failureRetries = 0
+	for (;;) {
+		let delay: number
+		let reason: string
+		try {
+			const response = await fetchImpl(url, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(message),
+			})
+			if (response.status === 200 || response.status === 422) return
+			if (response.status === 429) {
+				if (busyRetries >= BUSY_RETRY_LIMIT) return
+				busyRetries++
+				delay = BUSY_RETRY_DELAY_MS
+				reason = 'processor busy'
+			} else {
+				const next = FAILURE_RETRY_DELAYS_MS[failureRetries++]
+				if (next === undefined) return
+				delay = next
+				reason = `processor answered ${response.status}`
+			}
+		} catch (error) {
+			const next = FAILURE_RETRY_DELAYS_MS[failureRetries++]
+			if (next === undefined) return
+			delay = next
+			reason = `processor unreachable: ${String(error)}`
+		}
+		console.warn('[indexing] retrying local delivery', {
+			eventId: message.event_id,
+			reason,
+			delaySeconds: delay / 1000,
+		})
+		await new Promise((resolve) => setTimeout(resolve, delay))
+	}
+}
+
 /**
  * Sends an outbox event after its transaction commits. Failures are recorded
  * and left for the Worker's sweep, so this never throws.
@@ -97,14 +145,7 @@ export async function dispatchIndexing(
 			if (mode === 'queue') {
 				await publishToQueue(message, fetchImpl)
 			} else {
-				// The local processor answers only when the job ends, so don't wait for it.
-				void fetchImpl(env.PROCESSOR_URL, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(message),
-				}).catch((error: unknown) =>
-					console.warn('[indexing] local processor unreachable', String(error)),
-				)
+				void deliverDirect(env.PROCESSOR_URL, message, fetchImpl)
 			}
 			await db().outboxEvent.updateMany({
 				where: { id: event.id, publishedAt: null },
