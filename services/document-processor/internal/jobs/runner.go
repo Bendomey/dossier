@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"dossier/services/document-processor/internal/extract"
 	"dossier/services/document-processor/internal/failure"
 	"dossier/services/document-processor/internal/lang"
+	"dossier/services/document-processor/internal/ocr"
 	"dossier/services/document-processor/internal/store"
 )
 
@@ -40,18 +42,48 @@ type Runner struct {
 	store    *store.Store
 	objects  *blob.Store
 	embedder *embed.Embedder
+	reader   *ocr.Reader
 	log      *slog.Logger
 	busy     atomic.Bool
 }
 
-func NewRunner(cfg config.Config, st *store.Store, objects *blob.Store, embedder *embed.Embedder, log *slog.Logger) *Runner {
-	return &Runner{cfg: cfg, store: st, objects: objects, embedder: embedder, log: log}
+func NewRunner(cfg config.Config, st *store.Store, objects *blob.Store, embedder *embed.Embedder, reader *ocr.Reader, log *slog.Logger) *Runner {
+	return &Runner{cfg: cfg, store: st, objects: objects, embedder: embedder, reader: reader, log: log}
 }
 
 // TryAcquire keeps one job per process; the queue retries busy deliveries.
 func (r *Runner) TryAcquire() bool { return r.busy.CompareAndSwap(false, true) }
 
 func (r *Runner) Release() { r.busy.Store(false) }
+
+// jobFiles holds the job's temp directory; the source is downloaded at most
+// once, and only when extraction or OCR needs it.
+type jobFiles struct {
+	dir    string
+	source string
+}
+
+func (r *Runner) fetchSource(ctx context.Context, c *store.Claim, t *store.Target, files *jobFiles) (string, error) {
+	if files.source != "" {
+		return files.source, nil
+	}
+	format, _ := extract.FormatOf(t.FileName)
+	path := filepath.Join(files.dir, "source."+format)
+	checksum, _, err := r.objects.Download(ctx, t.FileKey, path, maxSourceBytes)
+	switch {
+	case errors.Is(err, blob.ErrNotFound):
+		return "", failure.Permanent(failure.SourceMissing, err)
+	case errors.Is(err, blob.ErrTooLarge):
+		return "", failure.Permanent(failure.CorruptFile, err)
+	case err != nil:
+		return "", failure.Transient(failure.StorageUnavailable, err)
+	}
+	if err := r.store.SetChecksum(ctx, c, t, checksum); err != nil {
+		return "", dbError(err)
+	}
+	files.source = path
+	return path, nil
+}
 
 func (r *Runner) Handle(ctx context.Context, m store.Message) Outcome {
 	log := r.log.With("job_id", m.IndexingJobID, "organization_id", m.OrganizationID, "event_id", m.EventID)
@@ -122,14 +154,26 @@ func (r *Runner) process(ctx context.Context, log *slog.Logger, c *store.Claim, 
 	if err := r.store.SetConfig(ctx, c, r.cfg.PipelineSignature(), r.embedder.Model()); err != nil {
 		return "", dbError(err)
 	}
+	work, err := os.MkdirTemp("", "job-")
+	if err != nil {
+		return "", failure.Transient(failure.Internal, err)
+	}
+	defer os.RemoveAll(work)
+	files := &jobFiles{dir: work}
 	// On a resumed job this reads the cached extraction, which activation
-	// needs for the page count and language.
-	doc, err := r.extract(ctx, log, c, t, !ready)
+	// needs for the page count.
+	doc, err := r.extract(ctx, log, c, t, files, !ready)
 	if err != nil {
 		return "EXTRACTING", err
 	}
 	var language string
 	if !ready {
+		if doc, err = r.readScannedPages(ctx, log, c, t, files, doc); err != nil {
+			return "EXTRACTING", err
+		}
+		if err := checkText(doc); err != nil {
+			return "EXTRACTING", err
+		}
 		if err := r.store.SetStage(ctx, c, "CHUNKING", 30); err != nil {
 			return "CHUNKING", dbError(err)
 		}
@@ -165,7 +209,7 @@ func (r *Runner) process(ctx context.Context, log *slog.Logger, c *store.Claim, 
 	return "", nil
 }
 
-func (r *Runner) extract(ctx context.Context, log *slog.Logger, c *store.Claim, t *store.Target, setStage bool) (*extract.Document, error) {
+func (r *Runner) extract(ctx context.Context, log *slog.Logger, c *store.Claim, t *store.Target, files *jobFiles, setStage bool) (*extract.Document, error) {
 	if setStage {
 		if err := r.store.SetStage(ctx, c, "EXTRACTING", 0); err != nil {
 			return nil, dbError(err)
@@ -183,26 +227,11 @@ func (r *Runner) extract(ctx context.Context, log *slog.Logger, c *store.Claim, 
 	}
 	if found {
 		log.Info("extraction cache hit")
-		return checkText(&cached)
+		return &cached, nil
 	}
-
-	dir, err := os.MkdirTemp("", "job-")
+	source, err := r.fetchSource(ctx, c, t, files)
 	if err != nil {
-		return nil, failure.Transient(failure.Internal, err)
-	}
-	defer os.RemoveAll(dir)
-	source := filepath.Join(dir, "source."+format)
-	checksum, _, err := r.objects.Download(ctx, t.FileKey, source, maxSourceBytes)
-	switch {
-	case errors.Is(err, blob.ErrNotFound):
-		return nil, failure.Permanent(failure.SourceMissing, err)
-	case errors.Is(err, blob.ErrTooLarge):
-		return nil, failure.Permanent(failure.CorruptFile, err)
-	case err != nil:
-		return nil, failure.Transient(failure.StorageUnavailable, err)
-	}
-	if err := r.store.SetChecksum(ctx, c, t, checksum); err != nil {
-		return nil, dbError(err)
+		return nil, err
 	}
 	if setStage {
 		if err := r.store.SetStage(ctx, c, "EXTRACTING", 5); err != nil {
@@ -220,16 +249,117 @@ func (r *Runner) extract(ctx context.Context, log *slog.Logger, c *store.Claim, 
 	if err := r.objects.PutJSON(ctx, key, doc); err != nil {
 		log.Warn("extraction cache write failed", "error", err)
 	}
-	return checkText(doc)
+	return doc, nil
 }
 
-// checkText fails documents with no usable text; Plan 3 runs OCR on the
-// flagged pages before this check.
-func checkText(doc *extract.Document) (*extract.Document, error) {
+// checkText runs after OCR. Pages OCR could not read stay flagged, and a
+// document that is mostly unread fails rather than going Ready on its cover.
+func checkText(doc *extract.Document) error {
 	if !doc.HasText() || (doc.PageCount > 0 && 2*len(doc.FlaggedPages) >= doc.PageCount) {
-		return nil, failure.Permanent(failure.NoTextFound, fmt.Errorf("%d of %d pages without a text layer", len(doc.FlaggedPages), doc.PageCount))
+		return failure.Permanent(failure.NoTextFound, fmt.Errorf("%d of %d pages without readable text", len(doc.FlaggedPages), doc.PageCount))
 	}
-	return doc, nil
+	return nil
+}
+
+// readScannedPages runs OCR on the flagged pages, reusing every page cached by
+// an earlier attempt; only uncached pages are reserved and sent.
+func (r *Runner) readScannedPages(ctx context.Context, log *slog.Logger, c *store.Claim, t *store.Target, files *jobFiles, doc *extract.Document) (*extract.Document, error) {
+	if len(doc.FlaggedPages) == 0 {
+		return doc, nil
+	}
+	if len(doc.FlaggedPages) > ocr.MaxPages {
+		return nil, failure.Permanent(failure.OCRLimitReached, fmt.Errorf("%d scanned pages", len(doc.FlaggedPages)))
+	}
+	pages := make(map[int]ocr.Page, len(doc.FlaggedPages))
+	var missing []int
+	for _, n := range doc.FlaggedPages {
+		var page ocr.Page
+		found, err := r.objects.GetJSON(ctx, ocr.CacheKey(t.OrganizationID, t.VersionID, n), &page)
+		if err != nil {
+			log.Warn("ocr cache read failed", "page", n, "error", err)
+		}
+		if found {
+			pages[n] = page
+		} else {
+			missing = append(missing, n)
+		}
+	}
+	if len(missing) > 0 {
+		source, err := r.fetchSource(ctx, c, t, files)
+		if err != nil {
+			return nil, err
+		}
+		superseded, err := r.store.Superseded(ctx, t)
+		if err != nil {
+			return nil, dbError(err)
+		}
+		if superseded {
+			return nil, store.ErrSuperseded
+		}
+		reserved, err := r.store.ReserveOCR(ctx, c, r.reader.Model(), len(missing), r.cfg.OCRMonthlyPageLimit)
+		if err != nil {
+			return nil, dbError(err)
+		}
+		if !reserved {
+			return nil, failure.Permanent(failure.OCRLimitReached, fmt.Errorf("monthly quota: %d pages needed", len(missing)))
+		}
+		for i, n := range missing {
+			page, err := r.readPage(ctx, log, c, t, files, source, n)
+			if err != nil {
+				return nil, err
+			}
+			pages[n] = page
+			if err := r.store.SetStage(ctx, c, "EXTRACTING", 5+25*(i+1)/len(missing)); err != nil {
+				return nil, dbError(err)
+			}
+		}
+	}
+	texts := make(map[int]string, len(pages))
+	for n, page := range pages {
+		if !page.Unreadable && strings.TrimSpace(page.Text) != "" {
+			texts[n] = page.Text
+		}
+	}
+	log.Info("scanned pages read", "flagged", len(doc.FlaggedPages), "sent", len(missing), "unreadable", len(doc.FlaggedPages)-len(texts))
+	return extract.MergeOCR(doc, texts), nil
+}
+
+func (r *Runner) readPage(ctx context.Context, log *slog.Logger, c *store.Claim, t *store.Target, files *jobFiles, source string, n int) (ocr.Page, error) {
+	image, err := extract.RenderPage(ctx, source, n, files.dir)
+	if err != nil {
+		var f *failure.Error
+		if errors.As(err, &f) && f.Code == failure.CorruptFile {
+			log.Warn("page could not be rendered", "page", n)
+			page := ocr.Page{Number: n, Model: r.reader.Model(), Unreadable: true}
+			if err := r.objects.PutJSON(ctx, ocr.CacheKey(t.OrganizationID, t.VersionID, n), page); err != nil {
+				log.Warn("ocr cache write failed", "page", n, "error", err)
+			}
+			return page, nil
+		}
+		return ocr.Page{}, err
+	}
+	defer os.Remove(image)
+	started := time.Now()
+	page, sent, err := r.reader.Read(ctx, image, n)
+	if err != nil {
+		return ocr.Page{}, err
+	}
+	if err := r.objects.PutJSON(ctx, ocr.CacheKey(t.OrganizationID, t.VersionID, n), page); err != nil {
+		log.Warn("ocr cache write failed", "page", n, "error", err)
+	}
+	if !sent {
+		return page, nil
+	}
+	if err := r.store.AddOCRPage(ctx, c); err != nil {
+		return ocr.Page{}, dbError(err)
+	}
+	if err := r.store.RecordAIRun(ctx, store.AIRun{
+		OrganizationID: t.OrganizationID, JobID: t.JobID, Model: page.Model, Operation: "OCR",
+		InputTokens: page.InputTokens, OutputTokens: page.OutputTokens, Latency: time.Since(started), Page: n,
+	}); err != nil {
+		log.Warn("ai run not recorded", "error", err)
+	}
+	return page, nil
 }
 
 func (r *Runner) embedAll(ctx context.Context, log *slog.Logger, c *store.Claim, t *store.Target) error {
@@ -262,7 +392,10 @@ func (r *Runner) embedAll(ctx context.Context, log *slog.Logger, c *store.Claim,
 		if err != nil {
 			return dbError(err)
 		}
-		if err := r.store.RecordAIRun(ctx, t.OrganizationID, r.embedder.Model(), "EMBEDDING", tokens, time.Since(started), t.JobID); err != nil {
+		if err := r.store.RecordAIRun(ctx, store.AIRun{
+			OrganizationID: t.OrganizationID, JobID: t.JobID, Model: r.embedder.Model(), Operation: "EMBEDDING",
+			InputTokens: tokens, Estimated: true, Latency: time.Since(started),
+		}); err != nil {
 			log.Warn("ai run not recorded", "error", err)
 		}
 		if err := r.store.SetStage(ctx, c, "EMBEDDING", 40+55*completed/max(total, 1)); err != nil {

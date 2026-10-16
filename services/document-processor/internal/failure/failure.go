@@ -8,6 +8,7 @@ const (
 	Encrypted           = "ENCRYPTED"
 	NoTextFound         = "NO_TEXT_FOUND"
 	TooManyPages        = "TOO_MANY_PAGES"
+	OCRLimitReached     = "OCR_LIMIT_REACHED"
 	SourceMissing       = "SOURCE_MISSING"
 	InvalidMessage      = "INVALID_MESSAGE"
 	Superseded          = "SUPERSEDED"

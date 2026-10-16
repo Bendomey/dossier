@@ -83,9 +83,13 @@ func extractPDF(ctx context.Context, path string) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
+	images, err := pageImages(ctx, path)
+	if err != nil {
+		return nil, err
+	}
 	lines := linesOf(xmlPages)
 	lines = dropRunningLines(lines, pages)
-	doc := &Document{PageCount: pages, FlaggedPages: flaggedPages(lines, pages)}
+	doc := &Document{PageCount: pages, FlaggedPages: flaggedPages(lines, pages, images)}
 	doc.Blocks = blocksFromLines(lines)
 	return doc, nil
 }
@@ -166,6 +170,34 @@ func pdfToXML(ctx context.Context, path string) ([]xmlPage, error) {
 	return parsed.Pages, nil
 }
 
+func pageImages(ctx context.Context, path string) (map[int]bool, error) {
+	output, err := run(ctx, "pdfimages", "-list", path)
+	if err != nil {
+		return nil, toolFailure(err, "pdfimages could not read the file")
+	}
+	pages := map[int]bool{}
+	for i, line := range strings.Split(string(output), "\n") {
+		fields := strings.Fields(line)
+		if i < 2 || len(fields) < 3 || (fields[2] != "image" && fields[2] != "stencil") {
+			continue
+		}
+		if n, err := strconv.Atoi(fields[0]); err == nil {
+			pages[n] = true
+		}
+	}
+	return pages, nil
+}
+
+// RenderPage writes one page as a 150 dpi grayscale PNG into dir, for OCR.
+func RenderPage(ctx context.Context, pdfPath string, page int, dir string) (string, error) {
+	prefix := filepath.Join(dir, fmt.Sprintf("page-%d", page))
+	n := strconv.Itoa(page)
+	if _, err := run(ctx, "pdftoppm", "-r", "150", "-gray", "-png", "-singlefile", "-f", n, "-l", n, pdfPath, prefix); err != nil {
+		return "", toolFailure(err, "pdftoppm could not render the page")
+	}
+	return prefix + ".png", nil
+}
+
 func linesOf(pages []xmlPage) []pdfLine {
 	fonts := map[string]float64{}
 	for _, p := range pages {
@@ -203,7 +235,7 @@ func linesOf(pages []xmlPage) []pdfLine {
 	return lines
 }
 
-func flaggedPages(lines []pdfLine, pageCount int) []int {
+func flaggedPages(lines []pdfLine, pageCount int, images map[int]bool) []int {
 	text := make([]strings.Builder, pageCount+1)
 	for _, l := range lines {
 		if l.page >= 1 && l.page <= pageCount {
@@ -214,7 +246,7 @@ func flaggedPages(lines []pdfLine, pageCount int) []int {
 	var flagged []int
 	for page := 1; page <= pageCount; page++ {
 		content := text[page].String()
-		if meaningfulChars(content) < minPageChars || garbageRatio(content) > maxGarbageRatio {
+		if images[page] && (meaningfulChars(content) < minPageChars || garbageRatio(content) > maxGarbageRatio) {
 			flagged = append(flagged, page)
 		}
 	}

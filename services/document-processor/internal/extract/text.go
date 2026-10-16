@@ -27,24 +27,32 @@ func extractText(path string, markdown bool) (*Document, error) {
 	if err != nil {
 		return nil, failure.Permanent(failure.CorruptFile, err)
 	}
-	text := decodeText(raw)
+	return &Document{Blocks: parseText(decodeText(raw), markdown)}, nil
+}
+
+// parseText turns plain text or Markdown into blocks; OCR transcriptions go
+// through it as Markdown.
+func parseText(text string, markdown bool) []Block {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 
-	doc := &Document{Blocks: []Block{}}
+	blocks := []Block{}
 	var paragraph []string
 	flush := func() {
 		if len(paragraph) > 0 {
-			doc.Blocks = append(doc.Blocks, Block{Kind: Paragraph, Text: collapseSpaces(strings.Join(paragraph, " ")), Source: Native})
+			blocks = append(blocks, Block{Kind: Paragraph, Text: collapseSpaces(strings.Join(paragraph, " ")), Source: Native})
 			paragraph = nil
 		}
 	}
 	inFence := false
 	afterListLine := false
+	afterTableRow := false
 	for _, line := range strings.Split(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		continuesList := afterListLine
+		continuesTable := afterTableRow
 		afterListLine = false
+		afterTableRow = false
 		if markdown && strings.HasPrefix(trimmed, "```") {
 			flush()
 			inFence = !inFence
@@ -61,12 +69,26 @@ func extractText(path string, markdown bool) (*Document, error) {
 			continue
 		}
 		if markdown {
+			if strings.HasPrefix(trimmed, "|") {
+				flush()
+				afterTableRow = true
+				row, ok := tableRow(trimmed)
+				if !ok {
+					continue
+				}
+				if continuesTable && len(blocks) > 0 && blocks[len(blocks)-1].Kind == Table {
+					blocks[len(blocks)-1].Text += "\n" + row
+				} else {
+					blocks = append(blocks, Block{Kind: Table, Text: row, Source: Native})
+				}
+				continue
+			}
 			if len(paragraph) == 1 && (setextH1.MatchString(trimmed) || setextH2.MatchString(trimmed)) {
 				level := 2
 				if trimmed[0] == '=' {
 					level = 1
 				}
-				doc.Blocks = append(doc.Blocks, Block{Kind: Heading, Level: level, Text: collapseSpaces(paragraph[0]), Source: Native})
+				blocks = append(blocks, Block{Kind: Heading, Level: level, Text: collapseSpaces(paragraph[0]), Source: Native})
 				paragraph = nil
 				continue
 			}
@@ -76,21 +98,21 @@ func extractText(path string, markdown bool) (*Document, error) {
 			}
 			if m := markdownHeading.FindStringSubmatch(trimmed); m != nil {
 				flush()
-				doc.Blocks = append(doc.Blocks, Block{Kind: Heading, Level: len(m[1]), Text: m[2], Source: Native})
+				blocks = append(blocks, Block{Kind: Heading, Level: len(m[1]), Text: m[2], Source: Native})
 				continue
 			}
 		} else if len(paragraph) == 0 && isShoutedHeading(trimmed) {
-			doc.Blocks = append(doc.Blocks, Block{Kind: Heading, Level: 1, Text: trimmed, Source: Native})
+			blocks = append(blocks, Block{Kind: Heading, Level: 1, Text: trimmed, Source: Native})
 			continue
 		}
 		if listMarker.MatchString(line) {
 			flush()
-			doc.Blocks = append(doc.Blocks, Block{Kind: ListItem, Text: collapseSpaces(trimmed), Source: Native})
+			blocks = append(blocks, Block{Kind: ListItem, Text: collapseSpaces(trimmed), Source: Native})
 			afterListLine = true
 			continue
 		}
 		if continuesList && len(paragraph) == 0 && line != trimmed {
-			last := &doc.Blocks[len(doc.Blocks)-1]
+			last := &blocks[len(blocks)-1]
 			last.Text = last.Text + " " + collapseSpaces(trimmed)
 			afterListLine = true
 			continue
@@ -98,7 +120,25 @@ func extractText(path string, markdown bool) (*Document, error) {
 		paragraph = append(paragraph, trimmed)
 	}
 	flush()
-	return doc, nil
+	return blocks
+}
+
+// tableRow reads a Markdown table row as cells joined by " | ", the form the
+// DOCX extractor and the chunker use; separator and empty rows report false.
+func tableRow(line string) (string, bool) {
+	if strings.Contains(line, "-") && strings.Trim(line, "|:- \t") == "" {
+		return "", false
+	}
+	cells := strings.Split(strings.Trim(line, "|"), "|")
+	empty := true
+	for i := range cells {
+		cells[i] = collapseSpaces(cells[i])
+		empty = empty && cells[i] == ""
+	}
+	if empty {
+		return "", false
+	}
+	return strings.Join(cells, " | "), true
 }
 
 // decodeText accepts UTF-8 (with or without a BOM) and falls back to

@@ -18,7 +18,9 @@ import (
 	"dossier/services/document-processor/internal/config"
 	"dossier/services/document-processor/internal/embed"
 	"dossier/services/document-processor/internal/failure"
+	"dossier/services/document-processor/internal/gemini"
 	"dossier/services/document-processor/internal/jobs"
+	"dossier/services/document-processor/internal/ocr"
 	"dossier/services/document-processor/internal/store"
 )
 
@@ -37,7 +39,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer st.Close()
-	runner := jobs.NewRunner(cfg, st, blob.New(cfg.R2), embed.New(cfg.Gemini, cfg.EmbeddingModel, cfg.EmbedRequestsPerMinute), log)
+	embedder := embed.New(gemini.New(cfg.Gemini, 60*time.Second, cfg.EmbedRequestsPerMinute), cfg.EmbeddingModel)
+	reader := ocr.NewReader(gemini.New(cfg.Gemini, 2*time.Minute, 0), cfg.OCRModel)
+	runner := jobs.NewRunner(cfg, st, blob.New(cfg.R2), embedder, reader, log)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {

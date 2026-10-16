@@ -7,7 +7,7 @@ check:
 	gofmt -l . | (! grep .) && go vet ./... && go build ./...
 
 inspect:
-	go run ./cmd/inspect $(if $(CHUNKS),-chunks) "$(FILE)"
+	go run ./cmd/inspect $(if $(CHUNKS),-chunks) $(if $(OCR),-ocr) $(if $(OCR_FROM),-ocr-from "$(OCR_FROM)") "$(FILE)"
 
 enqueue:
 	go run ./cmd/enqueue -job $(JOB)

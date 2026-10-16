@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"dossier/services/document-processor/internal/chunk"
-	"dossier/services/document-processor/internal/embed"
 	"dossier/services/document-processor/internal/extract"
+	"dossier/services/document-processor/internal/gemini"
 )
+
+const DefaultOCRModel = "gemini-2.5-flash-lite"
 
 type R2 struct {
 	AccountID       string
@@ -23,7 +25,9 @@ type Config struct {
 	Port                   string
 	DatabaseURL            string
 	R2                     R2
-	Gemini                 embed.Gemini
+	Gemini                 gemini.Settings
+	OCRModel               string
+	OCRMonthlyPageLimit    int
 	EmbeddingModel         string
 	EmbedRequestsPerMinute int
 	PipelineVersion        string
@@ -41,6 +45,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	ocrLimit, err := intEnv("OCR_MONTHLY_PAGE_LIMIT", 500)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		Port:        stringEnv("PORT", "8080"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
@@ -50,11 +58,9 @@ func Load() (Config, error) {
 			SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
 			Bucket:          os.Getenv("R2_BUCKET"),
 		},
-		Gemini: embed.Gemini{
-			BaseURL:      stringEnv("GEMINI_BASE_URL", embed.DefaultBaseURL),
-			APIKey:       os.Getenv("GEMINI_API_KEY"),
-			GatewayToken: os.Getenv("AI_GATEWAY_TOKEN"),
-		},
+		Gemini:                 GeminiSettings(),
+		OCRModel:               OCRModel(),
+		OCRMonthlyPageLimit:    ocrLimit,
 		EmbeddingModel:         stringEnv("EMBEDDING_MODEL", "gemini-embedding-001"),
 		EmbedRequestsPerMinute: rpm,
 		PipelineVersion:        stringEnv("PIPELINE_VERSION", "1"),
@@ -80,6 +86,9 @@ func Load() (Config, error) {
 	}
 	if rpm <= 0 {
 		return Config{}, fmt.Errorf("EMBED_REQUESTS_PER_MINUTE must be positive")
+	}
+	if ocrLimit <= 0 {
+		return Config{}, fmt.Errorf("OCR_MONTHLY_PAGE_LIMIT must be positive")
 	}
 	return cfg, nil
 }
@@ -111,6 +120,17 @@ func ChunkOptions() (chunk.Options, error) {
 		CharsPerToken: charsPerToken,
 	}, nil
 }
+
+// GeminiSettings is shared with cmd/inspect, which runs without a database.
+func GeminiSettings() gemini.Settings {
+	return gemini.Settings{
+		BaseURL:      stringEnv("GEMINI_BASE_URL", gemini.DefaultBaseURL),
+		APIKey:       os.Getenv("GEMINI_API_KEY"),
+		GatewayToken: os.Getenv("AI_GATEWAY_TOKEN"),
+	}
+}
+
+func OCRModel() string { return stringEnv("OCR_MODEL", DefaultOCRModel) }
 
 // PipelineSignature is stored on each job so we know which settings produced its chunks.
 func (c Config) PipelineSignature() string {

@@ -249,6 +249,47 @@ func (s *Store) ExpectedChunks(ctx context.Context, c *Claim) (expected, complet
 	return *e, completed, nil
 }
 
+// ReserveOCR counts pages against the organization's monthly quota before any
+// is sent; false means the quota would be exceeded and nothing was reserved.
+func (s *Store) ReserveOCR(ctx context.Context, c *Claim, model string, pages, limit int) (bool, error) {
+	if pages > limit {
+		return false, nil
+	}
+	reserved := false
+	err := s.withClaim(ctx, c, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE indexing_jobs SET ocr_model = $3 WHERE id = $1 AND organization_id = $2`,
+			c.JobID, c.OrganizationID, model); err != nil {
+			return err
+		}
+		var total int
+		err := tx.QueryRow(ctx, `
+			INSERT INTO ocr_usage (organization_id, period, pages_reserved)
+			VALUES ($1, date_trunc('month', now() AT TIME ZONE 'utc')::date, $2)
+			ON CONFLICT (organization_id, period) DO UPDATE
+			  SET pages_reserved = ocr_usage.pages_reserved + excluded.pages_reserved
+			  WHERE ocr_usage.pages_reserved + excluded.pages_reserved <= $3
+			RETURNING pages_reserved`,
+			c.OrganizationID, pages, limit).Scan(&total)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		reserved = true
+		return nil
+	})
+	return reserved, err
+}
+
+func (s *Store) AddOCRPage(ctx context.Context, c *Claim) error {
+	return s.withClaim(ctx, c, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE indexing_jobs SET ocr_page_count = ocr_page_count + 1 WHERE id = $1 AND organization_id = $2`,
+			c.JobID, c.OrganizationID)
+		return err
+	})
+}
+
 // ReplaceChunks clears every chunk of this version that isn't live (this
 // job's from an earlier attempt, and failed jobs' leftovers), then inserts the
 // new set without embeddings. Inserts are batched: COPY is refused on tables
@@ -426,15 +467,31 @@ func (s *Store) AuditFailure(ctx context.Context, t *Target, code string) error 
 	return err
 }
 
-func (s *Store) RecordAIRun(ctx context.Context, organizationID, model, operation string, inputTokens int, latency time.Duration, jobID string) error {
-	metadata, err := json.Marshal(map[string]any{"indexing_job_id": jobID, "estimated_tokens": true})
+type AIRun struct {
+	OrganizationID string
+	JobID          string
+	Model          string
+	Operation      string
+	InputTokens    int
+	OutputTokens   int
+	Estimated      bool
+	Latency        time.Duration
+	Page           int
+}
+
+func (s *Store) RecordAIRun(ctx context.Context, run AIRun) error {
+	details := map[string]any{"indexing_job_id": run.JobID, "estimated_tokens": run.Estimated}
+	if run.Page > 0 {
+		details["page"] = run.Page
+	}
+	metadata, err := json.Marshal(details)
 	if err != nil {
 		return err
 	}
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO ai_runs (organization_id, provider, model, operation, status, input_tokens, latency_ms, metadata, completed_at)
-		VALUES ($1, 'google', $2, $3::"AiOperation", 'SUCCEEDED', $4, $5, $6, now())`,
-		organizationID, model, operation, inputTokens, int(latency.Milliseconds()), metadata)
+		INSERT INTO ai_runs (organization_id, provider, model, operation, status, input_tokens, output_tokens, latency_ms, metadata, completed_at)
+		VALUES ($1, 'google', $2, $3::"AiOperation", 'SUCCEEDED', $4, $5, $6, $7, now())`,
+		run.OrganizationID, run.Model, run.Operation, run.InputTokens, nullInt(run.OutputTokens), int(run.Latency.Milliseconds()), metadata)
 	return err
 }
 

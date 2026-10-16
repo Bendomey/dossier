@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -13,7 +14,7 @@ import (
 )
 
 // Version names the extraction output format; cached artifacts are keyed by it.
-const Version = "x1"
+const Version = "x3"
 
 const MaxPages = 300
 
@@ -47,7 +48,7 @@ type Document struct {
 	Format    string  `json:"format"`
 	PageCount int     `json:"page_count"`
 	Blocks    []Block `json:"blocks"`
-	// Pages whose text layer is too thin to trust; OCR reads them in Plan 3.
+	// Pages whose text layer is too thin to trust; after OCR, the ones it could not read.
 	FlaggedPages []int `json:"flagged_pages,omitempty"`
 }
 
@@ -84,6 +85,62 @@ func Extract(ctx context.Context, path, format string) (*Document, error) {
 	doc.Blocks = sanitizeBlocks(doc.Blocks)
 	assignSectionNumbers(doc.Blocks)
 	return doc, nil
+}
+
+// MergeOCR swaps the native blocks of pages read by OCR for blocks parsed from
+// their Markdown transcriptions, keeping page order. A native block that also
+// covers an unread page is kept.
+func MergeOCR(doc *Document, texts map[int]string) *Document {
+	merged := *doc
+	if len(texts) == 0 {
+		return &merged
+	}
+	numbers := make([]int, 0, len(texts))
+	for n := range texts {
+		numbers = append(numbers, n)
+	}
+	slices.Sort(numbers)
+	ocrBlocks := func(page int) []Block {
+		blocks := sanitizeBlocks(parseText(texts[page], true))
+		for i := range blocks {
+			blocks[i].Source = OCR
+			blocks[i].PageStart = page
+			blocks[i].PageEnd = page
+		}
+		return blocks
+	}
+	replaced := func(b Block) bool {
+		if b.PageStart == 0 {
+			return false
+		}
+		for p := b.PageStart; p <= max(b.PageEnd, b.PageStart); p++ {
+			if _, ok := texts[p]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+	merged.Blocks = make([]Block, 0, len(doc.Blocks))
+	next := 0
+	for _, b := range doc.Blocks {
+		if replaced(b) {
+			continue
+		}
+		for next < len(numbers) && numbers[next] <= b.PageStart {
+			merged.Blocks = append(merged.Blocks, ocrBlocks(numbers[next])...)
+			next++
+		}
+		merged.Blocks = append(merged.Blocks, b)
+	}
+	for ; next < len(numbers); next++ {
+		merged.Blocks = append(merged.Blocks, ocrBlocks(numbers[next])...)
+	}
+	merged.FlaggedPages = slices.DeleteFunc(slices.Clone(doc.FlaggedPages), func(n int) bool {
+		_, ok := texts[n]
+		return ok
+	})
+	assignSectionNumbers(merged.Blocks)
+	return &merged
 }
 
 // sanitizeBlocks strips control characters (Postgres rejects NUL in text) and

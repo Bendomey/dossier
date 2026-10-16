@@ -41,6 +41,28 @@ make inspect FILE=~/Documents/contract.pdf            # blocks
 CHUNKS=1 make inspect FILE=~/Documents/contract.pdf   # chunks
 ```
 
+## Scanned pages (OCR)
+
+PDF pages that contain an image and have fewer than ~50 letters or digits in
+their text layer (or mostly broken characters) are rendered at 150 dpi and
+transcribed by `OCR_MODEL` (default `gemini-2.5-flash-lite`), one page at a
+time. Each answer is cached at `org/{org}/versions/{version}/ocr/page-{n}.json`,
+so retries never pay twice.
+
+- More than 50 scanned pages in one document fails with `OCR_LIMIT_REACHED`.
+- Each organization may send `OCR_MONTHLY_PAGE_LIMIT` pages a month (default
+  500), reserved in `ocr_usage` before anything is sent; running out also
+  fails with `OCR_LIMIT_REACHED`.
+- Pages the model declines stay unread; a document with half or more of its
+  pages unread fails with `NO_TEXT_FOUND`.
+
+Try a file without the database:
+
+```bash
+make inspect FILE=scan.pdf OCR=1          # calls Gemini, prints tokens per page (costs money)
+make inspect FILE=scan.pdf OCR_FROM=dir   # uses dir/page-<n>.md instead, no network
+```
+
 ## Checks
 
 `make check` (gofmt, go vet, go build). There are no automated tests in the MVP.
@@ -52,3 +74,4 @@ CHUNKS=1 make inspect FILE=~/Documents/contract.pdf   # chunks
 | File | Pages | Peak memory | Duration |
 |---|---|---|---|
 | Not measured yet — run `make docker && make bench` | | | |
+| Scanned pages | | | |
