@@ -87,13 +87,13 @@ const AUDIT_ENTRIES = [
 		target: 'Employment Agreement, Kwame Mensah',
 	},
 	{
-		actor: 'Ama Owusu',
+		actor: 'Victor Mendez',
 		action: 'member.invited',
 		resourceType: 'invitation',
-		target: 'abena@asante.co',
+		target: 'abena@victor.co',
 	},
 	{
-		actor: 'Ama Owusu',
+		actor: 'Victor Mendez',
 		action: 'document.uploaded',
 		resourceType: 'document',
 		target: 'Partnership Agreement v3',
@@ -126,7 +126,7 @@ async function seed(tx: Prisma.TransactionClient) {
 	const organization = await tx.organization.create({
 		data: {
 			name: ORGANIZATION.name,
-			slug: 'asante-co',
+			slug: 'victor-co',
 			country: ORGANIZATION.country,
 			responseLanguage: ORGANIZATION.response_language,
 			requireCitations: ORGANIZATION.require_citations,
@@ -300,7 +300,7 @@ async function seed(tx: Prisma.TransactionClient) {
 				createdAt,
 				members: {
 					create: {
-						membershipId: membershipIds.get('Ama Owusu')!,
+						membershipId: membershipIds.get('Victor Mendez')!,
 						role: 'OWNER',
 					},
 				},

@@ -8,7 +8,7 @@ export interface HistoryTurn {
 export interface ReplyOrganization {
 	id: string
 	name: string
-	country: 'GH' | 'LR'
+	country: 'GH' | 'EQ'
 	responseLanguage: ResponseLanguage
 	requireCitations: boolean
 }

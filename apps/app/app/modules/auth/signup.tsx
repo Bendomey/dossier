@@ -59,14 +59,14 @@ export function SignupModule() {
 						name="name"
 						autoComplete="name"
 						autoFocus={Boolean(email)}
-						placeholder="Ama Owusu"
+						placeholder="Victor Mendez"
 						error={errorFor('name')}
 					/>
 					<Input
 						label="Company"
 						name="company"
 						autoComplete="organization"
-						placeholder="Asante & Co."
+						placeholder="Victor & Co."
 						error={errorFor('company')}
 					/>
 				</div>

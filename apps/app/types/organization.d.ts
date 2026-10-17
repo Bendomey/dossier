@@ -4,7 +4,7 @@ type ResponseLanguage = 'MATCH' | 'EN' | 'FR' | 'PT'
 interface Organization {
 	id: string
 	name: string
-	country: 'GH' | 'LR'
+	country: 'GH' | 'EQ'
 	response_language: ResponseLanguage
 	require_citations: boolean
 	members_can_upload: boolean

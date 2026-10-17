@@ -25,7 +25,7 @@ interface AuditEvent {
 	category: AuditCategory
 }
 
-/** One audit log line, already worded for display (times in UTC, local time in Ghana and Liberia). */
+/** One audit log line, already worded for display (times in UTC, local time in Ghana and Equatorial Guinea). */
 interface AuditEntry {
 	id: string
 	occurred_at: string

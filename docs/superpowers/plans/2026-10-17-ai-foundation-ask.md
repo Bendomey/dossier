@@ -1188,7 +1188,7 @@ export interface HistoryTurn {
 export interface ReplyOrganization {
 	id: string
 	name: string
-	country: 'GH' | 'LR'
+	country: 'GH' | 'EQ'
 	responseLanguage: ResponseLanguage
 	requireCitations: boolean
 }
@@ -2146,7 +2146,7 @@ const MAX_OUTPUT_TOKENS = 1_500
 
 const COUNTRY_NAMES: Record<ReplyOrganization['country'], string> = {
 	GH: 'Ghana',
-	LR: 'Liberia',
+	EQ: 'Equatorial Guinea',
 }
 
 const LANGUAGE_RULES: Record<ResponseLanguage, string> = {

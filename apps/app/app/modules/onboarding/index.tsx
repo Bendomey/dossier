@@ -39,7 +39,7 @@ export function OnboardingModule() {
 					label="Company"
 					name="company"
 					autoComplete="organization"
-					placeholder="Asante & Co."
+					placeholder="Victor & Co."
 					autoFocus
 					error={result?.error}
 				/>

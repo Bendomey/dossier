@@ -15,7 +15,7 @@ const toggle = z.enum(['true', 'false']).transform((value) => value === 'true')
 const updateSchema = z
 	.object({
 		name: z.string().trim().min(1, 'Enter the organization name.').max(120),
-		country: z.enum(['GH', 'LR']),
+		country: z.enum(['GH', 'EQ']),
 		response_language: z.enum(['MATCH', 'EN', 'FR', 'PT']),
 		require_citations: toggle,
 		members_can_upload: toggle,

@@ -142,7 +142,7 @@ func tableRow(line string) (string, bool) {
 }
 
 // decodeText accepts UTF-8 (with or without a BOM) and falls back to
-// Windows-1252, which is what older Office exports in Ghana and Liberia produce.
+// Windows-1252, which is what older Office exports in Ghana and Equatorial Guinea produce.
 func decodeText(raw []byte) string {
 	if len(raw) >= 2 && (raw[0] == 0xFF && raw[1] == 0xFE || raw[0] == 0xFE && raw[1] == 0xFF) {
 		decoded, err := xunicode.UTF16(xunicode.LittleEndian, xunicode.UseBOM).NewDecoder().Bytes(raw)

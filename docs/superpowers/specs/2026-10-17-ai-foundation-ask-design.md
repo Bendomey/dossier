@@ -359,7 +359,7 @@ reranking call is the first thing to add.
    - **System instruction** (English, fixed, versioned as
      `ASK_PROMPT_VERSION` in run metadata):
      - Dossier's role: answering for colleagues at
-       `{organization.name}`, a company in `{Ghana|Liberia}`.
+       `{organization.name}`, a company in `{Ghana|Equatorial Guinea}`.
      - Answer only from the sources. After each claim, cite the supporting
        source IDs in square brackets, e.g. `[S2]` or `[S2, S5]`.
      - If the sources don't answer the question, say so plainly and suggest

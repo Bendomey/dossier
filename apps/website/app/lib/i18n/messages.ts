@@ -28,7 +28,7 @@ export const messages = {
 	'home.meta.description':
 		'Cited answers, contract review and drafting, grounded in your own company documents.',
 	'home.hero.badge': 'Early access',
-	'home.hero.announcement': 'Now onboarding companies in Ghana and Liberia',
+	'home.hero.announcement': 'Now onboarding companies in Ghana and Equatorial Guinea',
 	'home.hero.title': 'Your company’s documents, finally answering back.',
 	'home.hero.body':
 		'Justo reads your contracts, policies and templates, then answers questions, reviews agreements and drafts new ones from what your company has already approved. Every answer is cited.',

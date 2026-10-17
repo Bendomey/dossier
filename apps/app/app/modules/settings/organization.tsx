@@ -133,7 +133,7 @@ export function OrganizationSettingsModule() {
 						}
 					>
 						<option value="GH">Ghana</option>
-						<option value="LR">Liberia</option>
+						<option value="EQ">Equatorial Guinea</option>
 					</NativeSelect>
 				)}
 			</SettingRow>

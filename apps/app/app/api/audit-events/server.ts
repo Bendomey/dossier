@@ -32,7 +32,7 @@ const categoryOf = (action: string): AuditCategory =>
 const text = (value: unknown) => (typeof value === 'string' ? value : '')
 const lower = (value: unknown) => text(value).toLowerCase()
 
-/** Turns a stored event into "verb" + "target", e.g. "invited" + "esi@asante.co as member". */
+/** Turns a stored event into "verb" + "target", e.g. "invited" + "esi@victor.co as member". */
 export function describeAuditEvent(
 	action: string,
 	metadata: Record<string, unknown>,

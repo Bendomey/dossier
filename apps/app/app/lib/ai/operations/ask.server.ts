@@ -18,9 +18,9 @@ const HISTORY_CHAR_BUDGET = 8_000
 // Gemini 3 models think by default, and thinking tokens count against this limit.
 const MAX_OUTPUT_TOKENS = 4_096
 
-const COUNTRY_NAMES: Record<ReplyOrganization['country'], string> = {
+const COUNTRY_NAMES: Record<string, string> = {
 	GH: 'Ghana',
-	LR: 'Liberia',
+	EQ: 'Equatorial Guinea',
 }
 
 const LANGUAGE_RULES: Record<ResponseLanguage, string> = {

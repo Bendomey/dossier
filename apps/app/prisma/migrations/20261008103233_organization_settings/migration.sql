@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "Country" AS ENUM ('GH', 'LR');
+CREATE TYPE "Country" AS ENUM ('GH', 'EQ');
 
 -- CreateEnum
 CREATE TYPE "ResponseLanguage" AS ENUM ('MATCH', 'EN', 'FR', 'PT');
