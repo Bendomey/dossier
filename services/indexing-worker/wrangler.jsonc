@@ -32,11 +32,11 @@
 		]
 	},
 	// Created in the launch runbook: `wrangler hyperdrive create`, connecting as indexing_worker.
-	"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
-	"r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "dossier-documents" }],
+	"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "2e422a468c5d4fd5bad89203b7383d92" }],
+	"r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "dossier" }],
 	"triggers": { "crons": ["*/5 * * * *", "0 3 * * *"] },
 	"vars": {
-		"R2_BUCKET": "dossier-documents",
+		"R2_BUCKET": "dossier",
 		"EMBEDDING_MODEL": "gemini-embedding-001",
 		"OCR_MODEL": "gemini-2.5-flash-lite",
 		"OCR_MONTHLY_PAGE_LIMIT": "500",
