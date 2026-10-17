@@ -165,7 +165,7 @@ yarn db:studio
 - Every link from one app to the other MUST carry UTM parameters. Build it with `useAppUrl()` (website, `~/lib/use-app-url`) or `useWebsiteUrl()` (app, `~/lib/use-website-url`), passing a `placement` that names the link (e.g. `header_sign_in`). Server code uses `crossAppUrl()` from `~/lib/utm` with `resolveUtm()` from `~/lib/utm.server`
 - Both apps remember incoming campaign parameters in a 30-day `utm` cookie. Source, medium, campaign and term pass through; `utm_content` is always the clicked link; missing values default to `dossier_website` / `dossier_app` and `cross_app`
 - Never leave personal data in a URL: the website hands the sign-up email over as `?email=`, and the app's `/signup` loader moves it into a one-time flash and redirects to a clean URL
-- Hosts live in `APP_URL` (website constants) and `WEBSITE_URL` (app constants): currently https://dossier-africa.fly.dev and https://dossier.fly.dev
+- Hosts live in `APP_URL` (website constants) and `WEBSITE_URL` (app constants): currently https://justo-africa.fly.dev and https://justo.fly.dev
 
 ## Website Versioning
 
@@ -189,7 +189,7 @@ When adding a new publicly accessible page to `apps/website`:
 
 ## Deployment
 
-- **Platform:** Fly.io, one environment per app: `apps/website/fly.toml` (app `dossier`), `apps/app/fly.toml` (app `dossier-africa`)
+- **Platform:** Fly.io, one environment per app: `apps/website/fly.toml` (app `justo`), `apps/app/fly.toml` (app `justo-africa`)
 - **CI/CD:** `.github/workflows/website.yml` checks and deploys the website on every push to `main`. `.github/workflows/app.yml` only checks the app (lint, types) and runs its database migrations; the app is deployed by hand (see Manual deploy). There is no staging environment or `prod` branch
 - **App database migrations:** when a push to `main` changes `apps/app/prisma`, `app.yml` runs `prisma migrate deploy` against Supabase after the checks. Pull requests that change `apps/app/prisma` first apply all migrations to an empty pgvector Postgres, check they match `schema.prisma` and run the seed. A failed migration is not retried by later pushes that leave `prisma/` untouched: re-run it with "Run workflow" on the App workflow (manual runs always migrate). Because the app is deployed by hand, apply pending migrations (`yarn db:deploy`) before deploying code that needs them
 - **Manual deploy:** the app is deployed from a local checkout with `make deploy` in `apps/app` (`fly deploy --remote-only`). The website can also be deployed this way or from the Actions tab

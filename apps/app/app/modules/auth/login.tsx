@@ -27,9 +27,9 @@ export function LoginModule() {
 
 	return (
 		<AuthLayout
-			title="Sign in to Dossier"
+			title="Sign in to Justo"
 			description="Welcome back. Pick up where your team left off."
-			switchLead="New to Dossier?"
+			switchLead="New to Justo?"
 			switchLabel="Create account"
 			switchTo="/signup"
 		>

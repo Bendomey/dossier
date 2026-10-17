@@ -11,7 +11,7 @@ Cloudflare dashboard → R2 → bucket → Settings → CORS policy:
 ```json
 [
   {
-    "AllowedOrigins": ["https://dossier-africa.fly.dev", "http://localhost:3001"],
+    "AllowedOrigins": ["https://justo-africa.fly.dev", "http://localhost:3001"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["content-type"],
     "MaxAgeSeconds": 3600

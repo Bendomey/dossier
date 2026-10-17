@@ -23,7 +23,7 @@ export function Logo({ className }: { className?: string }) {
 			)}
 		>
 			<LogoMark />
-			Dossier
+			Justo
 		</span>
 	)
 }

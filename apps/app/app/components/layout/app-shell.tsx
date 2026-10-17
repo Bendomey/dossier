@@ -114,7 +114,7 @@ function MobileNav({
 
 	return (
 		<Drawer open={open} onOpenChange={onOpenChange}>
-			<DrawerContent side="left" title="Dossier">
+			<DrawerContent side="left" title="Justo">
 				<div className="flex h-full flex-col gap-1">
 					<WorkspaceSwitcher />
 					<PrimaryNav size="lg" onNavigate={close} />

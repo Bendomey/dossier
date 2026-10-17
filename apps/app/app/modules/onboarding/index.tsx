@@ -15,7 +15,7 @@ export function OnboardingModule() {
 	return (
 		<AuthLayout
 			title={additional ? 'Create another workspace' : 'Set up your workspace'}
-			description={`Signed in as ${email}. Name the company Dossier will answer for.`}
+			description={`Signed in as ${email}. Name the company Justo will answer for.`}
 			{...(additional
 				? {
 						switchLead: 'Changed your mind?',

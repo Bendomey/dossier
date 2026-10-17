@@ -21,7 +21,7 @@ export function pageTitle(title?: string) {
 		{ property: 'og:image:type', content: 'image/png' },
 		{
 			property: 'og:image:alt',
-			content: 'Dossier: answers, reviews and drafts from your own documents',
+			content: 'Justo: answers, reviews and drafts from your own documents',
 		},
 		{ name: 'twitter:card', content: 'summary_large_image' },
 		{ name: 'twitter:title', content: fullTitle },

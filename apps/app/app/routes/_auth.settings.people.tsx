@@ -49,7 +49,7 @@ export type PeopleActionResult = {
 const INVITE_MESSAGES = {
 	sent: (email: string) => `Invitation sent to ${email}.`,
 	'existing-account': (email: string) =>
-		`Invitation saved. ${email} already has a Dossier account, so they’ll see it in their workspace switcher next time they open Dossier.`,
+		`Invitation saved. ${email} already has a Justo account, so they’ll see it in their workspace switcher next time they open Justo.`,
 	'not-configured': (email: string) =>
 		`Invitation saved for ${email}, but no email was sent because invitation emails aren’t set up yet.`,
 	failed: (email: string) =>
@@ -60,7 +60,7 @@ const RESEND_MESSAGES = {
 	sent: (email: string) =>
 		`Sent a new link to ${email}. The invitation is good for another 7 days.`,
 	'existing-account': (email: string) =>
-		`Extended for 7 days. ${email} already uses Dossier, so they’ll see it in their workspace switcher.`,
+		`Extended for 7 days. ${email} already uses Justo, so they’ll see it in their workspace switcher.`,
 	'not-configured': () =>
 		'Extended for 7 days, but no email was sent because invitation emails aren’t set up yet.',
 	failed: () =>

@@ -106,7 +106,7 @@ export function DemoKnowledgeModule() {
 							Company knowledge
 						</h1>
 						<p className="text-secondary text-[15px]">
-							The documents and templates Dossier answers from. People only see
+							The documents and templates Justo answers from. People only see
 							what their access allows.
 						</p>
 					</div>

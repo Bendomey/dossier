@@ -62,7 +62,7 @@ export function UploadDialog({
 							maxFiles={fixedDocument ? 1 : 10}
 							multiple={!fixedDocument}
 							label="Drop files here or choose files"
-							description="Dossier reads each file and splits it into clauses it can cite."
+							description="Justo reads each file and splits it into clauses it can cite."
 							onUpload={async (item, { onProgress, signal }) => {
 								if (!item.file || !selectedCollection) {
 									throw new Error('Choose a collection first.')

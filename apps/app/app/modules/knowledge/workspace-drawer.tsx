@@ -152,7 +152,7 @@ export function DocumentWorkspaceDrawerModule() {
 					</span>
 
 					{document.status === 'FAILED' && document.error ? (
-						<Alert tone="danger" title="Dossier couldn’t index this file">
+						<Alert tone="danger" title="Justo couldn’t index this file">
 							{document.error}
 						</Alert>
 					) : null}
@@ -258,7 +258,7 @@ export function DocumentWorkspaceDrawerModule() {
 							</DialogTrigger>
 							<DialogContent
 								title="Remove from knowledge?"
-								description={`Dossier will stop answering from ${document.name}.`}
+								description={`Justo will stop answering from ${document.name}.`}
 							>
 								<remover.Form method="post" className="flex flex-col gap-3">
 									<input type="hidden" name="intent" value="remove" />

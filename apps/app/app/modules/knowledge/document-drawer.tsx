@@ -223,7 +223,7 @@ function DocumentDetails({
 				</DialogTrigger>
 				<DialogContent
 					title="Remove from knowledge?"
-					description={`Dossier will stop answering from ${document.name}. Its versions are deleted too.`}
+					description={`Justo will stop answering from ${document.name}. Its versions are deleted too.`}
 				>
 					<div className="flex justify-end gap-2">
 						<DialogClose asChild>

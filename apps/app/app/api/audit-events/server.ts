@@ -145,7 +145,7 @@ export function describeAuditEvent(
 		case 'ai.question_answered': {
 			const count = typeof m.citations === 'number' ? m.citations : 0
 			return {
-				action: 'asked Dossier a question',
+				action: 'asked Justo a question',
 				target: `${count} ${count === 1 ? 'source' : 'sources'} cited`,
 			}
 		}
@@ -198,7 +198,7 @@ function toEntry(row: AuditRow): AuditEntry {
 		actor:
 			row.actor?.displayName ??
 			row.actor?.email ??
-			(row.actorUserId ? 'A former member' : 'Dossier'),
+			(row.actorUserId ? 'A former member' : 'Justo'),
 		...describeAuditEvent(row.action, metadata),
 		category: categoryOf(row.action),
 	}

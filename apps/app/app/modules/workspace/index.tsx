@@ -55,7 +55,7 @@ export function WorkspaceModule() {
 						What would you like to work on?
 					</h1>
 					<p className="text-secondary text-base text-pretty">
-						Ask a question, draft a document or review a file. Dossier answers
+						Ask a question, draft a document or review a file. Justo answers
 						from {organization.name} knowledge.
 					</p>
 				</div>

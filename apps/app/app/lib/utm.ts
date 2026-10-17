@@ -18,7 +18,7 @@ export function readUtm(params: URLSearchParams): Utm {
 }
 
 /**
- * Builds a link into the other Dossier app. The campaign the visitor arrived
+ * Builds a link into the other Justo app. The campaign the visitor arrived
  * with (source, medium, campaign, term) passes through; anything missing is
  * filled in so every hop between apps is attributable. `utm_content` always
  * names the link that was clicked.

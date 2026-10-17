@@ -40,7 +40,7 @@ function downloadCsv(entries: AuditEntry[]) {
 			type: 'text/csv;charset=utf-8',
 		}),
 	)
-	link.download = 'dossier-audit-log.csv'
+	link.download = 'justo-audit-log.csv'
 	link.click()
 	URL.revokeObjectURL(link.href)
 }

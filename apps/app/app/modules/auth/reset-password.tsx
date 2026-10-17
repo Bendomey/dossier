@@ -37,7 +37,7 @@ export function ResetPasswordModule() {
 					title="Your new password is set"
 					description="We signed you out everywhere else, in case someone else knew the old one."
 					action={
-						<Button onClick={() => navigate('/')}>Continue to Dossier</Button>
+						<Button onClick={() => navigate('/')}>Continue to Justo</Button>
 					}
 				/>
 			</AuthLayout>

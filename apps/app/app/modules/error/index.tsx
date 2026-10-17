@@ -43,7 +43,7 @@ export function ErrorModule({
 				to="/"
 				className="bg-foreground text-background rounded-full px-5 py-2.5 text-sm font-medium hover:opacity-90"
 			>
-				Back to Dossier
+				Back to Justo
 			</Link>
 		</div>
 	)

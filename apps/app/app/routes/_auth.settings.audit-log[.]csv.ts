@@ -16,7 +16,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	return new Response(csv, {
 		headers: {
 			'Content-Type': 'text/csv; charset=utf-8',
-			'Content-Disposition': `attachment; filename="dossier-audit-log-${day}.csv"`,
+			'Content-Disposition': `attachment; filename="justo-audit-log-${day}.csv"`,
 			'Cache-Control': 'no-store',
 		},
 	})

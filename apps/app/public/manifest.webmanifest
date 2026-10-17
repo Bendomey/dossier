@@ -1,6 +1,6 @@
 {
-  "name": "Dossier",
-  "short_name": "Dossier",
+  "name": "Justo",
+  "short_name": "Justo",
   "description": "Your company’s documents, answering back.",
   "start_url": "/",
   "display": "standalone",
