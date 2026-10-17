@@ -494,6 +494,7 @@ export const DEMO_SESSION: Session = {
 		slug: 'asante-co',
 		logo_url: null,
 		member_count: MEMBERS.filter((member) => !member.invited).length,
+		document_count: UNLISTED_DOCUMENT_COUNT + DOCUMENTS.length,
 	},
 	workspaces: [
 		{

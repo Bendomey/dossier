@@ -106,6 +106,16 @@ async function latestJobStatuses(
 const viewerCan = (session: Session, permission: PermissionKey) =>
 	session.user.permissions.includes(permission)
 
+/** Documents on the Knowledge page: live, in a collection this person can see. */
+export function visibleDocuments(session: Session): Prisma.DocumentWhereInput {
+	return {
+		organizationId: session.organization.id,
+		deletedAt: null,
+		status: 'ACTIVE',
+		collection: visibleCollections(session),
+	}
+}
+
 export async function getKnowledgeOverview(
 	session: Session,
 	filters: {
@@ -117,12 +127,7 @@ export async function getKnowledgeOverview(
 ): Promise<KnowledgeOverview> {
 	const organizationId = session.organization.id
 	const collectionWhere = visibleCollections(session)
-	const liveDocument: Prisma.DocumentWhereInput = {
-		organizationId,
-		deletedAt: null,
-		status: 'ACTIVE',
-		collection: collectionWhere,
-	}
+	const liveDocument = visibleDocuments(session)
 
 	const [collections, groups, organization] = await Promise.all([
 		db().collection.findMany({

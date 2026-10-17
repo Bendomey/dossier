@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { visibleDocuments } from '~/api/collections/server'
 import { db } from '~/lib/db.server'
 
 export interface SessionIdentity {
@@ -145,7 +146,7 @@ export async function getSession(
 	]
 	const { organization } = membership
 
-	return {
+	const session: Session = {
 		user: {
 			id: identity.sub,
 			name: membership.user.displayName ?? displayName(identity),
@@ -161,10 +162,15 @@ export async function getSession(
 			slug: organization.slug,
 			logo_url: organization.logoUrl,
 			member_count: organization._count.members,
+			document_count: 0,
 		},
 		workspaces,
 		invitations,
 	}
+	session.organization.document_count = await db().document.count({
+		where: visibleDocuments(session),
+	})
+	return session
 }
 
 function slugify(name: string) {

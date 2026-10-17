@@ -24,6 +24,7 @@ interface SessionOrganization {
 	slug: string
 	logo_url: string | null
 	member_count: number
+	document_count: number
 }
 
 interface OrganizationSettings {

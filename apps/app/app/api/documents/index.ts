@@ -31,9 +31,10 @@ export const useGetDocumentVersions = (documentId: string) =>
 		queryFn: () => api.getDocumentVersions(documentId),
 	})
 
-export const useGetKnowledgeStats = () =>
+export const useGetKnowledgeStats = ({ enabled = true } = {}) =>
 	useQuery({
 		queryKey: [QUERY_KEYS.KNOWLEDGE_STATS],
+		enabled,
 		queryFn: api.getKnowledgeStats,
 		refetchInterval: (query) =>
 			query.state.data?.processing ? PROCESSING_POLL_MS : false,

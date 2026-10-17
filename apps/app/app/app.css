@@ -72,6 +72,11 @@
 	--control-glyph: #ffffff;
 }
 
+/* Pill controls would turn the select's open list into a stadium shape. */
+[data-radix-popper-content-wrapper] [role='listbox'] {
+	--radius-control: 1.125rem;
+}
+
 @theme {
 	--breakpoint-desk: 821px;
 }

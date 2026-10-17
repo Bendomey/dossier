@@ -9,6 +9,7 @@ import { useGetChats } from '~/api/chats'
 import { useGetKnowledgeStats } from '~/api/documents'
 import { cn } from '~/lib/utils'
 import { useAppBase } from '~/providers/app-base-provider'
+import { useSession } from '~/providers/session-provider'
 
 interface Props {
 	onNavigate?: () => void
@@ -63,8 +64,10 @@ function NavItem({
 }
 
 export function PrimaryNav(props: Props) {
-	const { data: stats } = useGetKnowledgeStats()
-	const { path } = useAppBase()
+	const { path, demo } = useAppBase()
+	const { organization } = useSession()
+	const { data: stats } = useGetKnowledgeStats({ enabled: demo })
+	const documentCount = demo ? stats?.total : organization.document_count
 
 	return (
 		<nav aria-label="Main" className="flex flex-col gap-1">
@@ -79,7 +82,7 @@ export function PrimaryNav(props: Props) {
 				to={path('/knowledge')}
 				icon={BookOpen}
 				label="Knowledge"
-				meta={stats ? String(stats.total) : undefined}
+				meta={documentCount === undefined ? undefined : String(documentCount)}
 				{...props}
 			/>
 		</nav>
