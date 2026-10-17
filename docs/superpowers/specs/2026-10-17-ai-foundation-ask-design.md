@@ -135,8 +135,8 @@ GEMINI_BASE_URL     default https://generativelanguage.googleapis.com
                     (production: the Cloudflare AI Gateway `dossier` URL ending /google-ai-studio)
 AI_GATEWAY_TOKEN    optional; sent as cf-aig-authorization: Bearer …
 EMBEDDING_MODEL     default gemini-embedding-001 (must equal the processor's)
-ASK_MODEL           default gemini-2.5-flash
-INTENT_MODEL        default gemini-2.5-flash-lite
+ASK_MODEL           default gemini-3.5-flash
+INTENT_MODEL        default gemini-3.1-flash-lite
 ```
 
 These are added to the Fly secrets list in `CLAUDE.md`.

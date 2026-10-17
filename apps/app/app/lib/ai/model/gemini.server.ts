@@ -135,8 +135,7 @@ function requestBody(
 		})),
 		generationConfig: {
 			temperature: request.temperature ?? 0.2,
-			maxOutputTokens: request.maxOutputTokens ?? 1024,
-			thinkingConfig: { thinkingBudget: 0 },
+			maxOutputTokens: request.maxOutputTokens ?? 2048,
 			...extraConfig,
 		},
 	}

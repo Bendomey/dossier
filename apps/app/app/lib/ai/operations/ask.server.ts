@@ -15,7 +15,8 @@ import type {
 const ASK_PROMPT_VERSION = 'ask-2026-10-17'
 const HISTORY_TURNS = 6
 const HISTORY_CHAR_BUDGET = 8_000
-const MAX_OUTPUT_TOKENS = 1_500
+// Gemini 3 models think by default, and thinking tokens count against this limit.
+const MAX_OUTPUT_TOKENS = 4_096
 
 const COUNTRY_NAMES: Record<ReplyOrganization['country'], string> = {
 	GH: 'Ghana',

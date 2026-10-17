@@ -48,10 +48,10 @@ const environmentSchema = z.object({
 		blankAsUnset,
 		z.string().default('gemini-embedding-001'),
 	),
-	ASK_MODEL: z.preprocess(blankAsUnset, z.string().default('gemini-2.5-flash')),
+	ASK_MODEL: z.preprocess(blankAsUnset, z.string().default('gemini-3.5-flash')),
 	INTENT_MODEL: z.preprocess(
 		blankAsUnset,
-		z.string().default('gemini-2.5-flash-lite'),
+		z.string().default('gemini-3.1-flash-lite'),
 	),
 	RETRIEVAL_MIN_SIMILARITY: z.preprocess(
 		blankAsUnset,

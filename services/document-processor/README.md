@@ -45,7 +45,7 @@ CHUNKS=1 make inspect FILE=~/Documents/contract.pdf   # chunks
 
 PDF pages that contain an image and have fewer than ~50 letters or digits in
 their text layer (or mostly broken characters) are rendered at 150 dpi and
-transcribed by `OCR_MODEL` (default `gemini-2.5-flash-lite`), one page at a
+transcribed by `OCR_MODEL` (default `gemini-3.1-flash-lite`), one page at a
 time. Each answer is cached at `org/{org}/versions/{version}/ocr/page-{n}.json`,
 so retries never pay twice.
 

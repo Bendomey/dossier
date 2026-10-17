@@ -29,8 +29,8 @@
   - `AI_ENABLED=false`
   - `GEMINI_BASE_URL=https://generativelanguage.googleapis.com`
   - `EMBEDDING_MODEL=gemini-embedding-001` (1536 dimensions, L2-normalized, `taskType: RETRIEVAL_QUERY` for queries)
-  - `ASK_MODEL=gemini-2.5-flash`
-  - `INTENT_MODEL=gemini-2.5-flash-lite`
+  - `ASK_MODEL=gemini-3.5-flash`
+  - `INTENT_MODEL=gemini-3.1-flash-lite`
   - `RETRIEVAL_MIN_SIMILARITY=0.55`
 - **Retrieval limits:**
   - 30 candidates from each search
@@ -280,10 +280,10 @@ Manual check: in `psql "$DIRECT_URL"`, `\d chat_messages` shows the new columns,
 		blankAsUnset,
 		z.string().default('gemini-embedding-001'),
 	),
-	ASK_MODEL: z.preprocess(blankAsUnset, z.string().default('gemini-2.5-flash')),
+	ASK_MODEL: z.preprocess(blankAsUnset, z.string().default('gemini-3.5-flash')),
 	INTENT_MODEL: z.preprocess(
 		blankAsUnset,
-		z.string().default('gemini-2.5-flash-lite'),
+		z.string().default('gemini-3.1-flash-lite'),
 	),
 	RETRIEVAL_MIN_SIMILARITY: z.preprocess(
 		blankAsUnset,
@@ -300,8 +300,8 @@ GEMINI_API_KEY=
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com
 AI_GATEWAY_TOKEN=
 EMBEDDING_MODEL=gemini-embedding-001
-ASK_MODEL=gemini-2.5-flash
-INTENT_MODEL=gemini-2.5-flash-lite
+ASK_MODEL=gemini-3.5-flash
+INTENT_MODEL=gemini-3.1-flash-lite
 RETRIEVAL_MIN_SIMILARITY=0.55
 ```
 
@@ -660,7 +660,7 @@ export const gemini: ModelAdapter = {
 Manual check: with `AI_ENABLED=true` and a real `GEMINI_API_KEY` in `.envrc`, run this one-off in `apps/app`:
 
 ```bash
-yarn tsx -e "import('./app/lib/ai/model/gemini.server.ts').then(async ({ gemini }) => { const s = new AbortController().signal; const v = await gemini.embedQuery('gemini-embedding-001', 'annual leave', s); console.log(v.length); for await (const e of gemini.streamText({ model: 'gemini-2.5-flash', system: 'Be brief.', turns: [{ role: 'user', text: 'Say hello' }] }, s)) console.log(e) })"
+yarn tsx -e "import('./app/lib/ai/model/gemini.server.ts').then(async ({ gemini }) => { const s = new AbortController().signal; const v = await gemini.embedQuery('gemini-embedding-001', 'annual leave', s); console.log(v.length); for await (const e of gemini.streamText({ model: 'gemini-3.5-flash', system: 'Be brief.', turns: [{ role: 'user', text: 'Say hello' }] }, s)) console.log(e) })"
 ```
 
 Expected: `1536`, then one or more `{ type: 'text' }` events, then `usage` and `finish`. If `tsx` can't resolve `~/`, add `--tsconfig tsconfig.json`. If Gemini rejects `responseJsonSchema` later in Task 6, switch the field to `responseSchema`, which takes the same object minus `additionalProperties`.

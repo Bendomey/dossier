@@ -12,7 +12,7 @@ import (
 	"dossier/services/document-processor/internal/gemini"
 )
 
-const DefaultOCRModel = "gemini-2.5-flash-lite"
+const DefaultOCRModel = "gemini-3.1-flash-lite"
 
 type R2 struct {
 	AccountID       string
