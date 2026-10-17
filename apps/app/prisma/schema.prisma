@@ -115,6 +115,22 @@ enum MessageRole {
   SYSTEM
 }
 
+enum MessageStatus {
+  PENDING
+  STREAMING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+/// Which workflow produced (or was asked for) a message.
+enum ChatOperation {
+  ASK
+  REVIEW
+  COMPARE
+  DRAFT
+}
+
 enum AiOperation {
   INTENT_DETECTION
   RETRIEVAL
@@ -238,6 +254,7 @@ model Organization {
   chunks                    DocumentChunk[]
   chats                     Chat[]
   chatMembers               ChatMember[]
+  chatCollections           ChatCollection[]
   chatMessages              ChatMessage[]
   chatAttachments           ChatAttachment[]
   citations                 MessageCitation[]
@@ -428,6 +445,7 @@ model Collection {
   members      CollectionMember[]
   groups       CollectionGroup[]
   documents    Document[]
+  chats        ChatCollection[]
 
   @@unique([organizationId, id])
   @@index([organizationId, parentId])
@@ -615,6 +633,8 @@ model DocumentChunk {
   /// Page, section, heading, paragraph and table positions used by citations.
   metadata          Json                         @default("{}")
   embedding         Unsupported("vector(1536)")?
+  /// Kept by the document_chunks_set_search_vector trigger; read only through raw SQL.
+  searchVector      Unsupported("tsvector")?     @map("search_vector")
   createdAt         DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -678,6 +698,7 @@ model Chat {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy          Profile             @relation(fields: [createdById], references: [id], onDelete: Cascade)
   members            ChatMember[]
+  collections        ChatCollection[]
   messages           ChatMessage[]
   attachments        ChatAttachment[]
   aiRuns             AiRun[]
@@ -704,15 +725,40 @@ model ChatMember {
   @@map("chat_members")
 }
 
+/// Collections a chat is limited to. No rows: everything the person can read.
+model ChatCollection {
+  organizationId String @map("organization_id") @db.Uuid
+  chatId         String @map("chat_id") @db.Uuid
+  collectionId   String @map("collection_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  chat         Chat         @relation(fields: [organizationId, chatId], references: [organizationId, id], onDelete: Cascade)
+  collection   Collection   @relation(fields: [organizationId, collectionId], references: [organizationId, id], onDelete: Cascade)
+
+  @@id([chatId, collectionId])
+  @@index([collectionId])
+  @@map("chat_collections")
+}
+
 model ChatMessage {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String      @map("organization_id") @db.Uuid
-  chatId         String      @map("chat_id") @db.Uuid
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  chatId         String         @map("chat_id") @db.Uuid
   role           MessageRole
   content        String
   sequence       Int
-  createdById    String?     @map("created_by") @db.Uuid
-  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  status         MessageStatus  @default(COMPLETED)
+  /// On a user message: the mode chosen in the composer. On a reply: the operation that ran.
+  operation      ChatOperation?
+  /// Set on user messages only; a repeated send with the same key returns the existing exchange.
+  idempotencyKey String?        @map("idempotency_key")
+  errorCode      String?        @map("error_code")
+  heartbeatAt    DateTime?      @map("heartbeat_at") @db.Timestamptz(3)
+  completedAt    DateTime?      @map("completed_at") @db.Timestamptz(3)
+  metadata       Json           @default("{}")
+  createdById    String?        @map("created_by") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   chat         Chat              @relation(fields: [organizationId, chatId], references: [organizationId, id], onDelete: Cascade)
@@ -723,6 +769,8 @@ model ChatMessage {
 
   @@unique([chatId, sequence])
   @@unique([organizationId, id])
+  @@unique([organizationId, createdById, idempotencyKey])
+  @@index([status, heartbeatAt])
   @@map("chat_messages")
 }
 
@@ -756,6 +804,9 @@ model MessageCitation {
   documentVersionId String   @map("document_version_id") @db.Uuid
   chunkId           String?  @map("chunk_id") @db.Uuid
   pageNumber        Int?     @map("page_number")
+  pageEnd           Int?     @map("page_end")
+  sectionNumber     String?  @map("section_number")
+  sectionTitle      String?  @map("section_title")
   quotedText        String?  @map("quoted_text")
   relevanceScore    Decimal? @map("relevance_score") @db.Decimal(6, 5)
   citationOrder     Int      @map("citation_order")

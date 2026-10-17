@@ -5,11 +5,13 @@ import { Composer } from './composer'
 import { MODE_KEYS, MODES, isChatMode } from './modes'
 import { useDemoPlay } from './use-demo-play'
 import { useCreateChat } from '~/api/chats'
-
 import { Alert } from '~/components/arc/alert/alert'
+import { Badge } from '~/components/arc/badge/badge'
 import { cn } from '~/lib/utils'
 import { useAppBase } from '~/providers/app-base-provider'
 import { useSession } from '~/providers/session-provider'
+
+const AVAILABLE_MODES: ChatMode[] = ['ASK']
 
 export function WorkspaceModule() {
 	const [searchParams] = useSearchParams()
@@ -18,16 +20,18 @@ export function WorkspaceModule() {
 	const createChat = useCreateChat()
 	const { path, demo } = useAppBase()
 
+	const isAvailable = (key: ChatMode) => demo || AVAILABLE_MODES.includes(key)
 	const initialMode = searchParams.get('mode')
 	const [mode, setMode] = useState<ChatMode | null>(
-		isChatMode(initialMode) ? initialMode : null,
+		isChatMode(initialMode) && isAvailable(initialMode) ? initialMode : null,
 	)
 	const [draft, setDraft] = useState(searchParams.get('draft') ?? '')
+	const [collectionId, setCollectionId] = useState<string | null>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
 	function send(prompt = draft.trim(), chatMode = mode) {
 		createChat.mutate(
-			{ prompt, mode: chatMode },
+			{ prompt, mode: chatMode, collectionId },
 			{
 				onSuccess: (chat) =>
 					navigate(path(`/chats/${chat.id}`), { replace: demo }),
@@ -65,21 +69,29 @@ export function WorkspaceModule() {
 								key={key}
 								type="button"
 								aria-pressed={active}
+								disabled={!isAvailable(key)}
 								onClick={() => setMode(active ? null : key)}
 								className={cn(
-									'flex cursor-pointer flex-col items-start gap-2.5 rounded-[22px] border p-4 text-left transition-[border-color,background-color,transform] active:scale-[.98]',
+									'flex cursor-pointer flex-col items-start gap-2.5 rounded-[22px] border p-4 text-left transition-[border-color,background-color,transform] enabled:active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60',
 									active
 										? 'border-accent bg-accent-subtle'
-										: 'bg-surface hover:border-border-strong',
+										: 'bg-surface enabled:hover:border-border-strong',
 								)}
 							>
-								<Icon
-									className={cn(
-										'size-5',
-										active ? 'text-accent' : 'text-foreground',
+								<span className="flex w-full items-start justify-between gap-2">
+									<Icon
+										className={cn(
+											'size-5',
+											active ? 'text-accent' : 'text-foreground',
+										)}
+										strokeWidth={1.75}
+									/>
+									{isAvailable(key) ? null : (
+										<Badge tone="neutral" size="sm">
+											Soon
+										</Badge>
 									)}
-									strokeWidth={1.75}
-								/>
+								</span>
 								<span className="flex flex-col gap-0.5">
 									<span className="text-sm font-medium">
 										{MODES[key].label}
@@ -101,6 +113,8 @@ export function WorkspaceModule() {
 					busy={createChat.isPending}
 					mode={mode}
 					onClearMode={() => setMode(null)}
+					collectionId={collectionId}
+					onCollectionChange={setCollectionId}
 					placeholder={
 						mode ? MODES[mode].placeholder : 'Ask anything or describe a task…'
 					}

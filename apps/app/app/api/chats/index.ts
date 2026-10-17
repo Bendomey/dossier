@@ -1,28 +1,96 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import * as live from './client'
 import { QUERY_KEYS } from '~/lib/constants'
-import * as api from '~/lib/mock/db'
+import * as mock from '~/lib/mock/db'
+import { useAppBase } from '~/providers/app-base-provider'
 
-const chatKey = (chatId: string) => [QUERY_KEYS.CHATS, chatId]
+interface ChatApi {
+	listChats(): Promise<ChatSummary[]>
+	getChat(chatId: string): Promise<Chat>
+	createChat(input: NewChatInput): Promise<Chat>
+	sendMessage(chatId: string, input: NewMessageInput): Promise<Chat>
+	cancelReply(chatId: string, messageId: string): Promise<unknown>
+	listCollections(): Promise<ChatCollectionOption[]>
+	streamReply(
+		chatId: string,
+		messageId: string,
+		onEvent: (event: ChatStreamEvent) => void,
+		signal: AbortSignal,
+	): void | Promise<void>
+}
 
-export const useGetChats = () =>
-	useQuery({ queryKey: [QUERY_KEYS.CHATS], queryFn: api.listChats })
+const liveApi: ChatApi = {
+	listChats: live.listChats,
+	getChat: live.getChat,
+	createChat: live.createChat,
+	sendMessage: live.sendMessage,
+	cancelReply: live.cancelReply,
+	listCollections: live.listChatCollections,
+	streamReply: live.streamReply,
+}
 
-export const useGetChat = (chatId: string) =>
-	useQuery({
-		queryKey: chatKey(chatId),
+const demoApi: ChatApi = {
+	listChats: mock.listChats,
+	getChat: mock.getChat,
+	createChat: ({ prompt, mode }) => mock.createChat(prompt, mode),
+	sendMessage: (chatId, { prompt, mode }) =>
+		mock.sendMessage(chatId, prompt, mode),
+	cancelReply: async () => undefined,
+	listCollections: async () =>
+		(await mock.listCollections()).map(({ id, name }) => ({ id, name })),
+	streamReply: (chatId, _messageId, onEvent, signal) =>
+		mock.streamReply(chatId, onEvent, signal),
+}
+
+function useChatApi() {
+	const { demo } = useAppBase()
+	return demo
+		? { api: demoApi, scope: 'demo' as const }
+		: { api: liveApi, scope: 'live' as const }
+}
+
+const chatsKey = (scope: string) => [QUERY_KEYS.CHATS, scope]
+const chatKey = (scope: string, chatId: string) => [
+	QUERY_KEYS.CHATS,
+	scope,
+	chatId,
+]
+
+export const isReplying = (message?: ChatMessage) =>
+	message?.role === 'ASSISTANT' &&
+	(message.status === 'PENDING' || message.status === 'STREAMING')
+
+export const useGetChats = () => {
+	const { api, scope } = useChatApi()
+	return useQuery({ queryKey: chatsKey(scope), queryFn: api.listChats })
+}
+
+export const useGetChat = (chatId: string) => {
+	const { api, scope } = useChatApi()
+	return useQuery({
+		queryKey: chatKey(scope, chatId),
 		queryFn: () => api.getChat(chatId),
 	})
+}
+
+export const useGetChatCollections = () => {
+	const { api, scope } = useChatApi()
+	return useQuery({
+		queryKey: [QUERY_KEYS.CHATS, scope, 'collections'],
+		queryFn: api.listCollections,
+	})
+}
 
 export const useCreateChat = () => {
 	const queryClient = useQueryClient()
+	const { api, scope } = useChatApi()
 	return useMutation({
-		mutationFn: ({ prompt, mode }: { prompt: string; mode: ChatMode | null }) =>
-			api.createChat(prompt, mode),
+		mutationFn: (input: NewChatInput) => api.createChat(input),
 		onSuccess: (chat) => {
-			queryClient.setQueryData(chatKey(chat.id), chat)
+			queryClient.setQueryData(chatKey(scope, chat.id), chat)
 			return queryClient.invalidateQueries({
-				queryKey: [QUERY_KEYS.CHATS],
+				queryKey: chatsKey(scope),
 				exact: true,
 			})
 		},
@@ -31,10 +99,32 @@ export const useCreateChat = () => {
 
 export const useSendMessage = (chatId: string) => {
 	const queryClient = useQueryClient()
+	const { api, scope } = useChatApi()
 	return useMutation({
-		mutationFn: ({ prompt, mode }: { prompt: string; mode: ChatMode | null }) =>
-			api.sendMessage(chatId, prompt, mode),
-		onSuccess: (chat) => queryClient.setQueryData(chatKey(chat.id), chat),
+		mutationFn: (input: NewMessageInput) => api.sendMessage(chatId, input),
+		onSuccess: (chat) =>
+			queryClient.setQueryData(chatKey(scope, chat.id), chat),
+	})
+}
+
+export const useCancelReply = (chatId: string) => {
+	const queryClient = useQueryClient()
+	const { api, scope } = useChatApi()
+	return useMutation({
+		mutationFn: (messageId: string) => api.cancelReply(chatId, messageId),
+		onSuccess: (_, messageId) =>
+			queryClient.setQueryData<Chat>(
+				chatKey(scope, chatId),
+				(current) =>
+					current && {
+						...current,
+						messages: current.messages.map((message) =>
+							message.id === messageId && isReplying(message)
+								? { ...message, status: 'CANCELLED' }
+								: message,
+						),
+					},
+			),
 	})
 }
 
@@ -51,12 +141,25 @@ function applyEvent(message: ChatMessage, event: ChatStreamEvent): ChatMessage {
 			}
 		case 'delta':
 			return { ...message, text: message.text + event.text }
+		case 'citations':
+			return { ...message, citations: event.citations }
 		case 'attachments': {
 			const { type: _, ...attachments } = event
 			return { ...message, ...attachments }
 		}
+		case 'error':
+			return {
+				...message,
+				status: event.code === 'CANCELLED' ? 'CANCELLED' : 'FAILED',
+				error: { code: event.code, retryable: event.retryable },
+			}
 		case 'done':
-			return { ...message, status: 'DONE' }
+			return {
+				...message,
+				status: 'DONE',
+				unsupported: event.unsupported,
+				clarifying: event.clarifying,
+			}
 	}
 }
 
@@ -66,21 +169,20 @@ function applyEvent(message: ChatMessage, event: ChatStreamEvent): ChatMessage {
  */
 export function useReplyStream(chat?: Chat) {
 	const queryClient = useQueryClient()
-	const unfinished = chat?.messages.findLast(
-		(message) => message.role === 'ASSISTANT' && message.status !== 'DONE',
-	)
+	const { api, scope } = useChatApi()
 	const chatId = chat?.id
-	const pendingId = unfinished?.id
+	const pendingId = chat?.messages.findLast(isReplying)?.id
 
 	useEffect(() => {
 		if (!chatId || !pendingId) return
 		const controller = new AbortController()
 
-		api.streamReply(
+		void api.streamReply(
 			chatId,
-			(event) =>
+			pendingId,
+			(event) => {
 				queryClient.setQueryData<Chat>(
-					chatKey(chatId),
+					chatKey(scope, chatId),
 					(current) =>
 						current && {
 							...current,
@@ -88,10 +190,17 @@ export function useReplyStream(chat?: Chat) {
 								message.id === pendingId ? applyEvent(message, event) : message,
 							),
 						},
-				),
+				)
+				if (event.type === 'done') {
+					void queryClient.invalidateQueries({
+						queryKey: chatsKey(scope),
+						exact: true,
+					})
+				}
+			},
 			controller.signal,
 		)
 
 		return () => controller.abort()
-	}, [chatId, pendingId, queryClient])
+	}, [api, scope, chatId, pendingId, queryClient])
 }

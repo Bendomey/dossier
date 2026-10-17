@@ -6,7 +6,7 @@ const EXPORT_LIMIT = 10_000
 
 const CATEGORY_PREFIXES: Record<AuditCategory, string[]> = {
 	DOCUMENTS: ['document.', 'collection.', 'template.'],
-	AI: ['ai.'],
+	AI: ['ai.', 'chat.'],
 	MEMBERS: ['member.', 'role.', 'group.'],
 	WORKSPACE: ['organization.'],
 }
@@ -136,6 +136,15 @@ export function describeAuditEvent(
 			return { action: 'removed', target: text(m.target) }
 		case 'document.permission_changed':
 			return { action: 'changed access on', target: text(m.target) }
+		case 'chat.created':
+			return { action: 'started a chat', target: '' }
+		case 'ai.question_answered': {
+			const count = typeof m.citations === 'number' ? m.citations : 0
+			return {
+				action: 'asked Dossier a question',
+				target: `${count} ${count === 1 ? 'source' : 'sources'} cited`,
+			}
+		}
 		case 'ai.contract_reviewed':
 			return { action: 'reviewed', target: text(m.target) }
 		case 'ai.document_generated':

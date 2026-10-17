@@ -1,9 +1,11 @@
-import { Download, RotateCcw } from 'lucide-react'
+import { Download, RotateCcw, Square } from 'lucide-react'
+import { Link } from 'react-router'
 import { Button } from '~/components/arc/button/button'
 import { CopyButton } from '~/components/arc/copy-button/copy-button'
 import { TextShimmer } from '~/components/arc/text-shimmer/text-shimmer'
 import { LogoMark } from '~/components/layout/logo'
 import { cn } from '~/lib/utils'
+import { useAppBase } from '~/providers/app-base-provider'
 
 export function UserMessage({ text }: { text: string }) {
 	return (
@@ -133,9 +135,106 @@ function Sources({ sources }: { sources: ChatSource[] }) {
 const actionClass =
 	'text-muted hover:bg-surface-muted hover:text-foreground flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[10px] px-2 text-xs'
 
-export function AssistantMessage({ message }: { message: ChatMessage }) {
+const chipClass =
+	'bg-surface animate-in fade-in zoom-in-95 flex h-8 max-w-full items-center gap-2 self-start rounded-[14px] border px-3 text-[13px] duration-250'
+
+function pagesOf(citation: Citation) {
+	if (citation.page === null) return null
+	return citation.page_end && citation.page_end !== citation.page
+		? `p. ${citation.page}–${citation.page_end}`
+		: `p. ${citation.page}`
+}
+
+function Citations({ citations }: { citations: Citation[] }) {
+	const { path } = useAppBase()
+	return (
+		<div className="flex flex-col gap-1.5">
+			{citations.map((citation) => {
+				const detail = [
+					citation.version_number && `v${citation.version_number}`,
+					pagesOf(citation),
+					citation.section,
+				]
+					.filter(Boolean)
+					.join(' · ')
+				const label = (
+					<>
+						<span className="text-accent font-mono text-xs">
+							[{citation.order}]
+						</span>
+						<span className="truncate">
+							{citation.available
+								? citation.document_name
+								: 'No longer available'}
+						</span>
+						{detail ? (
+							<span className="text-muted shrink-0">{detail}</span>
+						) : null}
+					</>
+				)
+				return citation.available ? (
+					<Link
+						key={citation.order}
+						to={path(`/knowledge/${citation.document_id}`)}
+						className={cn(chipClass, 'hover:border-border-strong')}
+					>
+						{label}
+					</Link>
+				) : (
+					<span key={citation.order} className={cn(chipClass, 'text-muted')}>
+						{label}
+					</span>
+				)
+			})}
+		</div>
+	)
+}
+
+const STOPPED_TEXT: Record<string, string> = {
+	CANCELLED: 'You stopped this answer.',
+	AI_DISABLED: 'AI isn’t configured for this workspace yet.',
+	PROVIDER_BLOCKED: 'The AI provider declined to answer this.',
+	STALLED: 'This answer stopped before it finished.',
+	CONNECTION_LOST: 'Lost the connection to this answer.',
+}
+
+function StoppedNotice({
+	message,
+	onRetry,
+}: {
+	message: ChatMessage
+	onRetry?: () => void
+}) {
+	const code = message.error?.code ?? message.status ?? ''
+	const retryable =
+		message.status === 'CANCELLED' || message.error?.retryable === true
+	return (
+		<div className="text-secondary -ml-2 flex flex-wrap items-center gap-1 text-sm">
+			<span className="px-2">
+				{STOPPED_TEXT[code] ?? 'Something went wrong while answering.'}
+			</span>
+			{retryable && onRetry ? (
+				<button type="button" className={actionClass} onClick={onRetry}>
+					<RotateCcw className="size-3.5" strokeWidth={1.75} />
+					Retry
+				</button>
+			) : null}
+		</div>
+	)
+}
+
+export function AssistantMessage({
+	message,
+	onRetry,
+	onStop,
+}: {
+	message: ChatMessage
+	onRetry?: () => void
+	onStop?: () => void
+}) {
 	const done = message.status === 'DONE'
-	const thinking = !done && !message.text
+	const stopped = message.status === 'FAILED' || message.status === 'CANCELLED'
+	const thinking = !done && !stopped && !message.text
 
 	return (
 		<div className="animate-in fade-in slide-in-from-bottom-1.5 flex items-start gap-3.5 duration-350">
@@ -148,11 +247,19 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
 				) : null}
 				{message.text ? (
 					<div
-						className="text-[15px] leading-[1.7] whitespace-pre-wrap"
+						className={cn(
+							'text-[15px] leading-[1.7] whitespace-pre-wrap',
+							stopped && 'text-secondary',
+						)}
 						aria-live="polite"
 					>
 						<CitedText text={message.text} />
 					</div>
+				) : null}
+				{done && message.unsupported ? (
+					<span className="text-warning bg-warning/12 self-start rounded-full px-2.5 py-1 text-xs">
+						No source cited: check before relying on this
+					</span>
 				) : null}
 				{done && message.findings ? (
 					<Findings findings={message.findings} />
@@ -160,6 +267,20 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
 				{done && message.changes ? <Changes changes={message.changes} /> : null}
 				{done && message.draft ? <DraftCard draft={message.draft} /> : null}
 				{done && message.sources ? <Sources sources={message.sources} /> : null}
+				{done && message.citations?.length ? (
+					<Citations citations={message.citations} />
+				) : null}
+				{stopped ? <StoppedNotice message={message} onRetry={onRetry} /> : null}
+				{!done && !stopped && onStop ? (
+					<button
+						type="button"
+						className={cn(actionClass, '-ml-2 self-start')}
+						onClick={onStop}
+					>
+						<Square className="size-3.5" strokeWidth={1.75} />
+						Stop
+					</button>
+				) : null}
 				{done ? (
 					<div className="animate-in fade-in -ml-2 flex items-center gap-0.5 duration-300">
 						<CopyButton value={message.text} variant="plain" />
@@ -167,10 +288,12 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
 							<Download className="size-3.5" strokeWidth={1.75} />
 							Export
 						</button>
-						<button type="button" className={actionClass}>
-							<RotateCcw className="size-3.5" strokeWidth={1.75} />
-							Retry
-						</button>
+						{onRetry ? (
+							<button type="button" className={actionClass} onClick={onRetry}>
+								<RotateCcw className="size-3.5" strokeWidth={1.75} />
+								Retry
+							</button>
+						) : null}
 					</div>
 				) : null}
 			</div>

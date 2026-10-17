@@ -1,7 +1,7 @@
 import { ArrowUp, Paperclip, X } from 'lucide-react'
 import { useEffect, useRef, type RefObject } from 'react'
 import { MODES } from './modes'
-import { useGetCollections } from '~/api/collections'
+import { useGetChatCollections } from '~/api/chats'
 import { Tooltip } from '~/components/arc/tooltip/tooltip'
 import { cn } from '~/lib/utils'
 
@@ -16,6 +16,8 @@ interface Props {
 	onClearMode?: () => void
 	autoFocus?: boolean
 	textareaRef?: RefObject<HTMLTextAreaElement | null>
+	collectionId?: string | null
+	onCollectionChange?: (collectionId: string | null) => void
 }
 
 const MAX_HEIGHT = 240
@@ -31,6 +33,8 @@ export function Composer({
 	onClearMode,
 	autoFocus,
 	textareaRef: externalRef,
+	collectionId,
+	onCollectionChange,
 }: Props) {
 	const internalRef = useRef<HTMLTextAreaElement>(null)
 	const textareaRef = externalRef ?? internalRef
@@ -138,7 +142,10 @@ export function Composer({
 					</span>
 				) : null}
 				{attachButton(false)}
-				<SourcesSelect />
+				<SourcesSelect
+					value={collectionId ?? null}
+					onChange={onCollectionChange}
+				/>
 				<span className="flex-1" />
 				<span className="text-muted hidden text-xs sm:inline">
 					Any language
@@ -149,13 +156,20 @@ export function Composer({
 	)
 }
 
-function SourcesSelect() {
-	const { data: collections } = useGetCollections()
+function SourcesSelect({
+	value,
+	onChange,
+}: {
+	value: string | null
+	onChange?: (collectionId: string | null) => void
+}) {
+	const { data: collections } = useGetChatCollections()
 
 	return (
 		<select
 			aria-label="Sources"
-			defaultValue=""
+			value={value ?? ''}
+			onChange={(event) => onChange?.(event.target.value || null)}
 			className="text-secondary hover:bg-surface-muted h-8 cursor-pointer rounded-xl bg-transparent px-2.5 text-[13px] outline-none"
 		>
 			<option value="">All knowledge</option>

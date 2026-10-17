@@ -34,6 +34,29 @@ const environmentSchema = z.object({
 	),
 	PROCESSOR_URL: z.string().default('http://localhost:8080/jobs'),
 	UPLOADS_ENABLED: z.preprocess(blankAsUnset, z.stringbool().default(false)),
+	/** Turns on Ask. Without it (or without GEMINI_API_KEY) chats reply that AI isn't configured. */
+	AI_ENABLED: z.preprocess(blankAsUnset, z.stringbool().default(false)),
+	GEMINI_API_KEY: z.preprocess(blankAsUnset, z.string().optional()),
+	/** Production: the Cloudflare AI Gateway URL ending in /google-ai-studio, as for the processor. */
+	GEMINI_BASE_URL: z.preprocess(
+		blankAsUnset,
+		z.string().default('https://generativelanguage.googleapis.com'),
+	),
+	AI_GATEWAY_TOKEN: z.preprocess(blankAsUnset, z.string().optional()),
+	/** Must equal the processor's EMBEDDING_MODEL, or retrieval finds nothing. */
+	EMBEDDING_MODEL: z.preprocess(
+		blankAsUnset,
+		z.string().default('gemini-embedding-001'),
+	),
+	ASK_MODEL: z.preprocess(blankAsUnset, z.string().default('gemini-2.5-flash')),
+	INTENT_MODEL: z.preprocess(
+		blankAsUnset,
+		z.string().default('gemini-2.5-flash-lite'),
+	),
+	RETRIEVAL_MIN_SIMILARITY: z.preprocess(
+		blankAsUnset,
+		z.coerce.number().min(0).max(1).default(0.55),
+	),
 })
 
 const environmentVariables = () => environmentSchema.parse(process.env)

@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Composer } from './composer'
 import { AssistantMessage, UserMessage } from './message'
-import { useGetChat, useReplyStream, useSendMessage } from '~/api/chats'
+import {
+	isReplying,
+	useCancelReply,
+	useGetChat,
+	useReplyStream,
+	useSendMessage,
+} from '~/api/chats'
 import { Alert } from '~/components/arc/alert/alert'
 import { Button } from '~/components/arc/button/button'
 import { EmptyState } from '~/components/arc/empty-state/empty-state'
@@ -15,14 +21,14 @@ export function ChatModule() {
 	const { path } = useAppBase()
 	const { data: chat, isPending, isError, error } = useGetChat(chatId)
 	const sendMessage = useSendMessage(chatId)
+	const cancelReply = useCancelReply(chatId)
 	const [draft, setDraft] = useState('')
 	const threadRef = useRef<HTMLDivElement>(null)
 
 	useReplyStream(chat)
 
 	const lastMessage = chat?.messages.at(-1)
-	const replying =
-		lastMessage?.role === 'ASSISTANT' && lastMessage.status !== 'DONE'
+	const replying = isReplying(lastMessage)
 
 	useEffect(() => {
 		const thread = threadRef.current
@@ -45,11 +51,20 @@ export function ChatModule() {
 		)
 	}
 
+	function ask(prompt: string) {
+		sendMessage.mutate({ prompt, mode: null })
+	}
+
 	function send() {
 		const prompt = draft.trim()
 		setDraft('')
-		sendMessage.mutate({ prompt, mode: null })
+		ask(prompt)
 	}
+
+	const questionBefore = (index: number) =>
+		chat?.messages
+			.slice(0, index)
+			.findLast((message) => message.role === 'USER')?.text
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -70,11 +85,23 @@ export function ChatModule() {
 					{isPending ? (
 						<Skeleton avatar lines={4} label="Loading chat" />
 					) : (
-						chat.messages.map((message) =>
+						chat.messages.map((message, index) =>
 							message.role === 'USER' ? (
 								<UserMessage key={message.id} text={message.text} />
 							) : (
-								<AssistantMessage key={message.id} message={message} />
+								<AssistantMessage
+									key={message.id}
+									message={message}
+									onStop={() => cancelReply.mutate(message.id)}
+									onRetry={
+										replying
+											? undefined
+											: () => {
+													const question = questionBefore(index)
+													if (question) ask(question)
+												}
+									}
+								/>
 							),
 						)
 					)}
