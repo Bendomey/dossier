@@ -436,7 +436,7 @@ reranking call is the first thing to add.
 
 ## Verification
 
-No automated tests: Dossier is a proof of concept. Each task is checked with
+No automated tests: Justo is a proof of concept. Each task is checked with
 `yarn types:check` and `yarn lint` in `apps/app`, then by hand in the running
 app (`make run-app`) against a workspace with indexed documents.
 

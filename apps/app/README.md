@@ -1,4 +1,4 @@
-# Dossier app
+# Justo app
 
 The product: workspace chat, company knowledge and settings. React Router v7
 (SSR), TanStack Query, Tailwind CSS v4 and Arc UI.

@@ -2,7 +2,7 @@ import { useRouteLoaderData } from 'react-router'
 import { WEBSITE_URL } from './constants'
 import { crossAppUrl, type Utm } from './utm'
 
-export const APP_UTM_SOURCE = 'dossier_app'
+export const APP_UTM_SOURCE = 'justo_app'
 
 /** Link builder for the marketing website that carries the visitor's attribution. */
 export function useWebsiteUrl() {

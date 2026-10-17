@@ -6,7 +6,7 @@ share.
 
 ## Goal
 
-Dossier is a company-document intelligence and workflow product, not a
+Justo is a company-document intelligence and workflow product, not a
 chatbot. The AI workspace offers four capabilities over a company's indexed
 knowledge, in one conversation:
 
@@ -298,7 +298,7 @@ Compare need `chat.create` plus read access to their subjects; Draft needs
 
 ## Verification
 
-No automated tests or evaluation harnesses: Dossier is a proof of concept.
+No automated tests or evaluation harnesses: Justo is a proof of concept.
 Each sub-project is checked with `yarn types:check` and `yarn lint` (and
 `make check` if the Go processor changes), then by hand in the running app
 using the manual checks listed in its spec: permission boundaries,
