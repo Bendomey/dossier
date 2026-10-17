@@ -27,7 +27,19 @@ async function call<T>(url: string, init: RequestInit = {}): Promise<T> {
 	return body as T
 }
 
-export const listChats = () => call<ChatSummary[]>('/api/chats')
+export const listChats = (cursor: string | null) =>
+	call<ChatPage>(
+		cursor ? `/api/chats?cursor=${encodeURIComponent(cursor)}` : '/api/chats',
+	)
+
+export const renameChat = (chatId: string, title: string) =>
+	call<{ ok: boolean }>(`/api/chats/${chatId}`, {
+		method: 'PATCH',
+		body: JSON.stringify({ title }),
+	})
+
+export const archiveChat = (chatId: string) =>
+	call<{ ok: boolean }>(`/api/chats/${chatId}/archive`, { method: 'POST' })
 
 export const getChat = (chatId: string) => call<Chat>(`/api/chats/${chatId}`)
 

@@ -16,10 +16,11 @@ const bodySchema = z.object({
 	collection_id: z.uuid().nullable().optional(),
 })
 
-export async function loader({ context }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
 	const session = requireSession(context)
 	requirePermission(session, 'chat.read')
-	return Response.json(await listChats(session))
+	const cursor = new URL(request.url).searchParams.get('cursor')
+	return Response.json(await listChats(session, cursor))
 }
 
 export async function action({ request, context }: Route.ActionArgs) {

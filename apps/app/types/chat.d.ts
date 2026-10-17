@@ -63,6 +63,11 @@ interface Chat {
 
 type ChatSummary = Pick<Chat, 'id' | 'title' | 'created_at'>
 
+interface ChatPage {
+	chats: ChatSummary[]
+	next_cursor: string | null
+}
+
 interface NewChatInput {
 	prompt: string
 	mode: ChatMode | null

@@ -9,7 +9,8 @@ import type {
 import { sectionLabel } from '~/lib/ai/sources.server'
 import { db } from '~/lib/db.server'
 
-const RECENT_CHATS = 50
+const CHAT_PAGE_SIZE = 30
+export const CHAT_TITLE_MAX = 100
 const TITLE_LENGTH = 60
 const QUOTE_LENGTH = 300
 const ACTIVE_REPLY: MessageStatus[] = ['PENDING', 'STREAMING']
@@ -172,18 +173,97 @@ export function citationFromPassage({
 	}
 }
 
-export async function listChats(session: Session): Promise<ChatSummary[]> {
+const encodeCursor = (updatedAt: Date, id: string) =>
+	Buffer.from(`${updatedAt.toISOString()}|${id}`).toString('base64url')
+
+function decodeCursor(cursor: string) {
+	const [time, id] = Buffer.from(cursor, 'base64url').toString().split('|')
+	const updatedAt = new Date(time ?? '')
+	return id && !Number.isNaN(updatedAt.getTime()) ? { updatedAt, id } : null
+}
+
+/** Newest-updated first, keyset-paged on (updated_at, id). */
+export async function listChats(
+	session: Session,
+	cursor: string | null,
+): Promise<ChatPage> {
+	const after = cursor ? decodeCursor(cursor) : null
 	const chats = await db().chat.findMany({
-		where: ownChats(session),
-		orderBy: { updatedAt: 'desc' },
-		take: RECENT_CHATS,
-		select: { id: true, title: true, createdAt: true },
+		where: {
+			...ownChats(session),
+			...(after && {
+				OR: [
+					{ updatedAt: { lt: after.updatedAt } },
+					{ updatedAt: after.updatedAt, id: { lt: after.id } },
+				],
+			}),
+		},
+		orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+		take: CHAT_PAGE_SIZE + 1,
+		select: { id: true, title: true, createdAt: true, updatedAt: true },
 	})
-	return chats.map((chat) => ({
-		id: chat.id,
-		title: chat.title,
-		created_at: chat.createdAt.toISOString(),
-	}))
+	const page = chats.slice(0, CHAT_PAGE_SIZE)
+	const last = page.at(-1)
+	return {
+		chats: page.map((chat) => ({
+			id: chat.id,
+			title: chat.title,
+			created_at: chat.createdAt.toISOString(),
+		})),
+		next_cursor:
+			chats.length > CHAT_PAGE_SIZE && last
+				? encodeCursor(last.updatedAt, last.id)
+				: null,
+	}
+}
+
+async function ownChatId(session: Session, chatId: string) {
+	const chat = await db().chat.findFirst({
+		where: { id: chatId, ...ownChats(session) },
+		select: { id: true },
+	})
+	if (!chat) throw chatNotFound()
+	return chat.id
+}
+
+export async function renameChat(
+	session: Session,
+	chatId: string,
+	title: string,
+) {
+	const id = await ownChatId(session, chatId)
+	await db().$transaction([
+		db().chat.update({ where: { id }, data: { title } }),
+		db().auditLog.create({
+			data: {
+				organizationId: session.organization.id,
+				actorUserId: session.user.id,
+				action: 'chat.renamed',
+				resourceType: 'chat',
+				resourceId: id,
+			},
+		}),
+	])
+}
+
+/** Archiving is the only way to remove a chat: its messages stay, it just leaves every list and URL. */
+export async function archiveChat(session: Session, chatId: string) {
+	const id = await ownChatId(session, chatId)
+	await db().$transaction([
+		db().chat.update({
+			where: { id },
+			data: { status: 'ARCHIVED', archivedAt: new Date() },
+		}),
+		db().auditLog.create({
+			data: {
+				organizationId: session.organization.id,
+				actorUserId: session.user.id,
+				action: 'chat.archived',
+				resourceType: 'chat',
+				resourceId: id,
+			},
+		}),
+	])
 }
 
 export async function getChat(session: Session, chatId: string): Promise<Chat> {

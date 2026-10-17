@@ -343,11 +343,35 @@ const toChat = (chat: StoredChat): Chat => ({
 	),
 })
 
-export async function listChats(): Promise<ChatSummary[]> {
+const CHAT_PAGE_SIZE = 30
+
+export async function listChats(
+	cursor: string | null = null,
+): Promise<ChatPage> {
 	await delay(200)
-	return state.chats
-		.toSorted((a, b) => b.created_at.localeCompare(a.created_at))
-		.map(({ id, title, created_at }) => ({ id, title, created_at }))
+	const sorted = state.chats.toSorted((a, b) =>
+		b.created_at.localeCompare(a.created_at),
+	)
+	const start = cursor ? Number(cursor) : 0
+	const end = start + CHAT_PAGE_SIZE
+	return {
+		chats: sorted
+			.slice(start, end)
+			.map(({ id, title, created_at }) => ({ id, title, created_at })),
+		next_cursor: end < sorted.length ? String(end) : null,
+	}
+}
+
+export async function renameChat(chatId: string, title: string) {
+	await delay(150)
+	const chat =
+		state.chats.find((item) => item.id === chatId) ?? notFound('Chat')
+	chat.title = title
+}
+
+export async function archiveChat(chatId: string) {
+	await delay(150)
+	state.chats = state.chats.filter((chat) => chat.id !== chatId)
 }
 
 export async function getChat(chatId: string) {

@@ -138,6 +138,10 @@ export function describeAuditEvent(
 			return { action: 'changed access on', target: text(m.target) }
 		case 'chat.created':
 			return { action: 'started a chat', target: '' }
+		case 'chat.renamed':
+			return { action: 'renamed a chat', target: '' }
+		case 'chat.archived':
+			return { action: 'archived a chat', target: '' }
 		case 'ai.question_answered': {
 			const count = typeof m.citations === 'number' ? m.citations : 0
 			return {

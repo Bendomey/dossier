@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from '@tanstack/react-query'
 import { useEffect } from 'react'
 import * as live from './client'
 import { QUERY_KEYS } from '~/lib/constants'
@@ -6,7 +11,9 @@ import * as mock from '~/lib/mock/db'
 import { useAppBase } from '~/providers/app-base-provider'
 
 interface ChatApi {
-	listChats(): Promise<ChatSummary[]>
+	listChats(cursor: string | null): Promise<ChatPage>
+	renameChat(chatId: string, title: string): Promise<unknown>
+	archiveChat(chatId: string): Promise<unknown>
 	getChat(chatId: string): Promise<Chat>
 	createChat(input: NewChatInput): Promise<Chat>
 	sendMessage(chatId: string, input: NewMessageInput): Promise<Chat>
@@ -22,6 +29,8 @@ interface ChatApi {
 
 const liveApi: ChatApi = {
 	listChats: live.listChats,
+	renameChat: live.renameChat,
+	archiveChat: live.archiveChat,
 	getChat: live.getChat,
 	createChat: live.createChat,
 	sendMessage: live.sendMessage,
@@ -32,6 +41,8 @@ const liveApi: ChatApi = {
 
 const demoApi: ChatApi = {
 	listChats: mock.listChats,
+	renameChat: mock.renameChat,
+	archiveChat: mock.archiveChat,
 	getChat: mock.getChat,
 	createChat: ({ prompt, mode }) => mock.createChat(prompt, mode),
 	sendMessage: (chatId, { prompt, mode }) =>
@@ -63,7 +74,52 @@ export const isReplying = (message?: ChatMessage) =>
 
 export const useGetChats = () => {
 	const { api, scope } = useChatApi()
-	return useQuery({ queryKey: chatsKey(scope), queryFn: api.listChats })
+	return useInfiniteQuery({
+		queryKey: chatsKey(scope),
+		queryFn: ({ pageParam }) => api.listChats(pageParam),
+		initialPageParam: null as string | null,
+		getNextPageParam: (page) => page.next_cursor,
+		// A chat that moves to the top while you scroll can show up on two pages.
+		select: (data) => [
+			...new Map(
+				data.pages.flatMap((page) => page.chats).map((chat) => [chat.id, chat]),
+			).values(),
+		],
+	})
+}
+
+export const useRenameChat = () => {
+	const queryClient = useQueryClient()
+	const { api, scope } = useChatApi()
+	return useMutation({
+		mutationFn: ({ chatId, title }: { chatId: string; title: string }) =>
+			api.renameChat(chatId, title),
+		onSuccess: (_, { chatId, title }) => {
+			queryClient.setQueryData<Chat>(
+				chatKey(scope, chatId),
+				(current) => current && { ...current, title },
+			)
+			return queryClient.invalidateQueries({
+				queryKey: chatsKey(scope),
+				exact: true,
+			})
+		},
+	})
+}
+
+export const useArchiveChat = () => {
+	const queryClient = useQueryClient()
+	const { api, scope } = useChatApi()
+	return useMutation({
+		mutationFn: (chatId: string) => api.archiveChat(chatId),
+		onSuccess: (_, chatId) => {
+			queryClient.removeQueries({ queryKey: chatKey(scope, chatId) })
+			return queryClient.invalidateQueries({
+				queryKey: chatsKey(scope),
+				exact: true,
+			})
+		},
+	})
 }
 
 export const useGetChat = (chatId: string) => {
