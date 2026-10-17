@@ -9,7 +9,7 @@ export function Logo() {
 			<span className="bg-foreground grid size-[22px] place-items-center rounded-md">
 				<span className="bg-background size-2 rounded-[2px]" />
 			</span>
-			Dossier
+			Justo
 		</Link>
 	)
 }

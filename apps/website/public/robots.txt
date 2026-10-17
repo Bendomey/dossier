@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://dossier.fly.dev/sitemap.xml
+Sitemap: https://justo.fly.dev/sitemap.xml
 
 # Disallow admin/api routes
 Disallow: /api/

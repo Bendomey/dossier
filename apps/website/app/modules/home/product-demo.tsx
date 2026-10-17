@@ -53,7 +53,7 @@ export function ProductDemo({ tab, onTabChange }: Props) {
 								<iframe
 									src={appUrl(item.demoPath, `home_demo_${item.value}`)}
 									loading="lazy"
-									title={`Dossier: ${t(item.label)}`}
+									title={`Justo: ${t(item.label)}`}
 									className="block size-full border-0"
 								/>
 							</div>

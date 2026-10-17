@@ -4,7 +4,7 @@ import { environmentVariables } from '~/lib/actions/env.server'
 
 const ENDPOINT = 'https://translation.googleapis.com/language/translate/v2'
 const MAX_SEGMENTS_PER_REQUEST = 128
-const PROTECTED_TERMS = ['Dossier']
+const PROTECTED_TERMS = ['Justo']
 
 const cache = new Map<Language, Promise<Messages>>()
 

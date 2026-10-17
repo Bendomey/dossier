@@ -1,12 +1,12 @@
 export const NODE_ENV = process.env.NODE_ENV
-export const APP_NAME = 'dossier'
-/** Temporary Fly.io hosts until the dossier domain is secured. */
+export const APP_NAME = 'justo'
+/** Temporary Fly.io hosts until the Justo domain is secured. */
 export const APP_DOMAIN =
-	NODE_ENV === 'production' ? 'dossier.fly.dev' : 'localhost'
+	NODE_ENV === 'production' ? 'justo.fly.dev' : 'localhost'
 
-export const APP_URL = 'https://dossier-africa.fly.dev'
+export const APP_URL = 'https://justo-africa.fly.dev'
 
-export const CONTACT_EMAIL = 'hello@dossier.africa'
+export const CONTACT_EMAIL = 'hello@justo.africa'
 export const WHATSAPP_NUMBER = '+233 00 000 0000'
 
 export const QUERY_KEYS = {} as const

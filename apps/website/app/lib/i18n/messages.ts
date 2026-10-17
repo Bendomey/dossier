@@ -18,20 +18,20 @@ export const messages = {
 	'footer.terms': 'Terms',
 	'footer.security': 'Security',
 	'footer.contact': 'Contact',
-	'footer.company': 'Dossier Technologies Ltd. · Accra, Ghana',
+	'footer.company': 'Justo Technologies Ltd. · Accra, Ghana',
 
 	'notFound.title': 'Page not found',
 	'notFound.message': 'Sorry, we couldn’t find the page you’re looking for.',
 	'notFound.cta': 'Go back home',
 
-	'home.meta.title': 'Dossier · Your company’s documents, now answering back',
+	'home.meta.title': 'Justo · Your company’s documents, now answering back',
 	'home.meta.description':
 		'Cited answers, contract review and drafting, grounded in your own company documents.',
 	'home.hero.badge': 'Early access',
 	'home.hero.announcement': 'Now onboarding companies in Ghana and Liberia',
 	'home.hero.title': 'Your company’s documents, finally answering back.',
 	'home.hero.body':
-		'Dossier reads your contracts, policies and templates, then answers questions, reviews agreements and drafts new ones from what your company has already approved. Every answer is cited.',
+		'Justo reads your contracts, policies and templates, then answers questions, reviews agreements and drafts new ones from what your company has already approved. Every answer is cited.',
 	'home.hero.secondaryCta': 'See how it works',
 
 	'home.demo.label': 'Product demo',
@@ -53,7 +53,7 @@ export const messages = {
 
 	'home.features.title': 'Four jobs, one source of truth.',
 	'home.features.body':
-		'Dossier doesn’t make up answers. It looks up your documents first and then reasons over the relevant clauses, so its output matches how your company already works.',
+		'Justo doesn’t make up answers. It looks up your documents first and then reasons over the relevant clauses, so its output matches how your company already works.',
 	'home.features.try': 'Try it in the product',
 	'home.features.askTag': 'Ask',
 	'home.features.askTitle': 'Company Q&A',
@@ -85,7 +85,7 @@ export const messages = {
 	'home.steps.uploadTitle': 'Upload your documents',
 	'home.steps.uploadBody':
 		'PDF, DOCX and scans. Constitutions, handbooks, templates, signed agreements.',
-	'home.steps.indexTitle': 'Dossier indexes them by clause',
+	'home.steps.indexTitle': 'Justo indexes them by clause',
 	'home.steps.indexBody':
 		'Each document is split into its sections and clauses, with your access rules applied, so answers point to the exact passage.',
 	'home.steps.workTitle': 'Ask, review, draft',
@@ -99,7 +99,7 @@ export const messages = {
 		'People only get answers from the documents they’re allowed to open.',
 	'home.security.citedTitle': 'Cited, every time',
 	'home.security.citedBody':
-		'Each claim links to its source clause. If the documents don’t cover something, Dossier tells you.',
+		'Each claim links to its source clause. If the documents don’t cover something, Justo tells you.',
 	'home.security.dataTitle': 'Your data stays yours',
 	'home.security.dataBody':
 		'Documents are isolated per organization and never used to train models.',
@@ -112,7 +112,7 @@ export const messages = {
 	'home.access.talkFirst': 'Prefer to talk first?',
 	'home.access.builtIn': 'Built in Accra.',
 
-	'pricing.meta.title': 'Pricing | Dossier',
+	'pricing.meta.title': 'Pricing | Justo',
 	'pricing.meta.description':
 		'Start free. Pay when your team grows. Every plan includes cited answers, contract review and drafting.',
 	'pricing.hero.title': 'Start free. Pay when your team grows.',
@@ -132,7 +132,7 @@ export const messages = {
 	'pricing.plans.everythingInFree': 'Everything in Free, plus',
 	'pricing.plans.everythingInTeam': 'Everything in Team, plus',
 	'pricing.plans.everythingInBusiness': 'Everything in Business, plus',
-	'pricing.plans.freeBlurb': 'For trying Dossier with a small team.',
+	'pricing.plans.freeBlurb': 'For trying Justo with a small team.',
 	'pricing.plans.teamBlurb': 'For growing teams working from shared documents.',
 	'pricing.plans.businessBlurb':
 		'For legal, HR and ops teams that need control.',

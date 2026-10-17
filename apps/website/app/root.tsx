@@ -85,7 +85,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 					media="(prefers-color-scheme: dark)"
 				/>
 				<meta name="apple-mobile-web-app-capable" content="yes" />
-				<meta name="apple-mobile-web-app-title" content="Dossier" />
+				<meta name="apple-mobile-web-app-title" content="Justo" />
 				<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 				<Meta />
 				<Links />
